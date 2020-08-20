@@ -1,0 +1,3 @@
+include ':adsHelper'
+include ':app'
+rootProject.name = "AdsHelper"
