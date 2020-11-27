@@ -3,6 +3,7 @@ package com.ji.adshelper.ads;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -10,6 +11,7 @@ import androidx.annotation.Nullable;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.OnLifecycleEvent;
 import androidx.lifecycle.ProcessLifecycleOwner;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
@@ -20,6 +22,9 @@ import com.google.android.gms.ads.appopen.AppOpenAd;
 import static androidx.lifecycle.Lifecycle.Event.ON_START;
 
 public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, LifecycleObserver {
+    public static final String ACTION_CLOSE = "openAdsHelper_ActionClose";
+    public static final String ACTION_ERROR = "openAdsHelper_ActionError";
+
     private static OpenAdsHelper instance;
 
     private Context context;
@@ -81,10 +86,12 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
                             appOpenAd = null;
                             isShowingAd = false;
                             fetchAd();
+                            sendEvent(ACTION_CLOSE);
                         }
 
                         @Override
                         public void onAdFailedToShowFullScreenContent(AdError adError) {
+                            sendEvent(ACTION_ERROR);
                         }
 
                         @Override
@@ -96,6 +103,7 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
         } else {
             //fetch a new ad if needed
             fetchAd();
+            sendEvent(ACTION_ERROR);
         }
     }
 
@@ -149,4 +157,8 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
     }
 
     // endregion
+
+    private void sendEvent(String action) {
+        LocalBroadcastManager.getInstance(context).sendBroadcast(new Intent(action));
+    }
 }
