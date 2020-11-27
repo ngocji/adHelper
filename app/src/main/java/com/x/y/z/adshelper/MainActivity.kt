@@ -6,7 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.ads.AdSize.BANNER
 import com.google.android.gms.ads.rewarded.RewardItem
 import com.google.android.gms.ads.rewarded.RewardedAdCallback
-import com.ji.adshelper.AdsHelper
+import com.ji.adshelper.ads.AdsHelper
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {

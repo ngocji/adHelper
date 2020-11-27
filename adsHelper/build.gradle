@@ -32,7 +32,14 @@ android {
 }
 
 dependencies {
-    api 'com.google.android.gms:play-services-ads:19.3.0'
-    api 'androidx.constraintlayout:constraintlayout:1.1.3'
-    api 'com.anjlab.android.iab.v3:library:1.1.0'
+    api 'com.google.android.gms:play-services-ads:19.5.0'
+    api 'com.android.billingclient:billing:3.0.2'
+
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    implementation 'com.google.code.gson:gson:2.8.6'
+
+    def lifecycle_version = "2.0.0"
+    implementation "androidx.lifecycle:lifecycle-extensions:$lifecycle_version"
+    implementation "androidx.lifecycle:lifecycle-runtime:$lifecycle_version"
+    annotationProcessor "androidx.lifecycle:lifecycle-compiler:$lifecycle_version"
 }

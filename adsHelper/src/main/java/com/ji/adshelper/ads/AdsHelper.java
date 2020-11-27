@@ -1,4 +1,4 @@
-package com.ji.adshelper;
+package com.ji.adshelper.ads;
 
 import android.content.Context;
 import android.view.View;
