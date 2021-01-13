@@ -102,7 +102,7 @@ public class BillingHelper {
         context.startActivity(browserIntent);
     }
 
-    private void acknowledgePurchase(Purchase purchase) {
+    public void acknowledgePurchase(Purchase purchase) {
         if (mBillingClient == null) return;
 
         AcknowledgePurchaseParams params = AcknowledgePurchaseParams.newBuilder()
