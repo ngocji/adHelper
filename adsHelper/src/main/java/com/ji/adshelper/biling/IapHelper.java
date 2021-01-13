@@ -70,6 +70,7 @@ public class IapHelper {
     }
 
     private boolean isAvailableExpiredTime() {
-        return sharedPreferences.getLong(PREF_EXPIRED_TIME, 0) > System.currentTimeMillis();
+        long expiredTime = sharedPreferences.getLong(PREF_EXPIRED_TIME, 0);
+        return expiredTime == 0 || expiredTime > System.currentTimeMillis();
     }
 }
