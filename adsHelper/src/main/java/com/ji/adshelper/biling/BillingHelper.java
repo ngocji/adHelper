@@ -9,6 +9,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.android.billingclient.api.AcknowledgePurchaseParams;
 import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
@@ -101,6 +102,20 @@ public class BillingHelper {
         context.startActivity(browserIntent);
     }
 
+    private void acknowledgePurchase(Purchase purchase) {
+        if (mBillingClient == null) return;
+
+        AcknowledgePurchaseParams params = AcknowledgePurchaseParams.newBuilder()
+                .setPurchaseToken(purchase.getPurchaseToken())
+                .build();
+
+        mBillingClient.acknowledgePurchase(params, billingResult -> {
+            if (billingListener != null) {
+                billingListener.onPurchaseSuccess(purchase);
+            }
+        });
+    }
+
     private boolean isSubscriptionSupported() {
         int responseCode = mBillingClient.isFeatureSupported(BillingClient.SkuType.SUBS).getResponseCode();
         if (responseCode != BillingClient.BillingResponseCode.OK)
@@ -170,5 +185,7 @@ public class BillingHelper {
         void onPurchaseHistoryResponse(List<Purchase> purchasedItems);
 
         void onPurchasesUpdated(int responseCode, @Nullable List<Purchase> purchases);
+
+        void onPurchaseSuccess(Purchase purchase);
     }
 }
