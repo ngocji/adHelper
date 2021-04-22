@@ -10,7 +10,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.ads.AdSize.BANNER
 import com.google.android.gms.ads.rewarded.RewardItem
-import com.google.android.gms.ads.rewarded.RewardedAdCallback
 import com.ji.adshelper.ads.AdsHelper
 import com.ji.adshelper.ads.OpenAdsHelper
 import kotlinx.android.synthetic.main.activity_main.*
@@ -26,10 +25,13 @@ class MainActivity : AppCompatActivity() {
         AdsHelper.loadRewardAd(this)
 //
 //
-        buttonInteres.setOnClickListener { AdsHelper.showInterstitialAd(this, null) }
+        buttonInteres.setOnClickListener { AdsHelper.showInterstitialAd(this, false, null) }
         buttonReward.setOnClickListener {
-            AdsHelper.showRewardAd(this, object : RewardedAdCallback() {
-                override fun onUserEarnedReward(p0: RewardItem) {
+            AdsHelper.showRewardAd(this, false, object : AdsHelper.AdListener() {
+                override fun onAdLoadFailed() {
+                }
+
+                override fun onAdRewarded() {
                     Log.e("OnReward", "RUn")
                 }
             })

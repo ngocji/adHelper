@@ -11,13 +11,11 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-
 import androidx.annotation.Nullable;
 
-import com.google.android.gms.ads.formats.MediaView;
-import com.google.android.gms.ads.formats.NativeAd.Image;
-import com.google.android.gms.ads.formats.UnifiedNativeAd;
-import com.google.android.gms.ads.formats.UnifiedNativeAdView;
+import com.google.android.gms.ads.nativead.MediaView;
+import com.google.android.gms.ads.nativead.NativeAd;
+import com.google.android.gms.ads.nativead.NativeAdView;
 import com.ji.adshelper.R;
 
 /** Base class for a template view. * */
@@ -25,8 +23,8 @@ public class TemplateView extends FrameLayout {
 
   private int templateType;
   private NativeTemplateStyle styles;
-  private UnifiedNativeAd nativeAd;
-  private UnifiedNativeAdView nativeAdView;
+  private NativeAd nativeAd;
+  private NativeAdView nativeAdView;
 
 
   private TextView primaryView;
@@ -67,7 +65,7 @@ public class TemplateView extends FrameLayout {
     this.applyStyles();
   }
 
-  public UnifiedNativeAdView getNativeAdView() {
+  public NativeAdView getNativeAdView() {
     return nativeAdView;
   }
 
@@ -165,19 +163,19 @@ public class TemplateView extends FrameLayout {
     requestLayout();
   }
 
-  private boolean adHasOnlyStore(UnifiedNativeAd nativeAd) {
+  private boolean adHasOnlyStore(NativeAd nativeAd) {
     String store = nativeAd.getStore();
     String advertiser = nativeAd.getAdvertiser();
     return !isNullOrEmpty(store) && isNullOrEmpty(advertiser);
   }
 
-  private boolean adHasOnlyAdvertiser(UnifiedNativeAd nativeAd) {
+  private boolean adHasOnlyAdvertiser(NativeAd nativeAd) {
     String store = nativeAd.getStore();
     String advertiser = nativeAd.getAdvertiser();
     return !isNullOrEmpty(advertiser) && isNullOrEmpty(store);
   }
 
-  private boolean adHasBothStoreAndAdvertiser(UnifiedNativeAd nativeAd) {
+  private boolean adHasBothStoreAndAdvertiser(NativeAd nativeAd) {
     String store = nativeAd.getStore();
     String advertiser = nativeAd.getAdvertiser();
     return (!isNullOrEmpty(advertiser)) && (!isNullOrEmpty(store));
@@ -187,7 +185,7 @@ public class TemplateView extends FrameLayout {
     return string == null || string.isEmpty();
   }
 
-  public void setNativeAd(UnifiedNativeAd nativeAd) {
+  public void setNativeAd(NativeAd nativeAd) {
     this.nativeAd = nativeAd;
 
     String store = nativeAd.getStore();
@@ -196,7 +194,7 @@ public class TemplateView extends FrameLayout {
     String body = nativeAd.getBody();
     String cta = nativeAd.getCallToAction();
     Double starRating = nativeAd.getStarRating();
-    Image icon = nativeAd.getIcon();
+    NativeAd.Image icon = nativeAd.getIcon();
 
     String tertiaryText;
 
@@ -288,7 +286,7 @@ public class TemplateView extends FrameLayout {
   @Override
   public void onFinishInflate() {
     super.onFinishInflate();
-    nativeAdView = (UnifiedNativeAdView) findViewById(R.id.native_ad_view);
+    nativeAdView = (NativeAdView) findViewById(R.id.native_ad_view);
     primaryView = (TextView) findViewById(R.id.primary);
     secondaryView = (TextView) findViewById(R.id.secondary);
 

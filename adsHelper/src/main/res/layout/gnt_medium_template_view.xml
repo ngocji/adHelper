@@ -2,7 +2,7 @@
 <merge xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:android="http://schemas.android.com/apk/res/android">
-  <com.google.android.gms.ads.formats.UnifiedNativeAdView
+  <com.google.android.gms.ads.nativead.NativeAdView
       android:layout_height="match_parent"
       android:layout_width="match_parent"
       android:layout_centerInParent="true"
@@ -136,7 +136,7 @@
             android:layout_marginEnd="@dimen/gnt_default_margin"
             android:layout_marginTop="@dimen/gnt_default_margin"
             >
-          <com.google.android.gms.ads.formats.MediaView
+          <com.google.android.gms.ads.nativead.MediaView
               android:id="@+id/media_view"
               android:layout_weight="@dimen/gnt_media_view_weight"
               android:layout_width="@dimen/gnt_no_size"
@@ -184,6 +184,6 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-  </com.google.android.gms.ads.formats.UnifiedNativeAdView>
+  </com.google.android.gms.ads.nativead.NativeAdView>
 
 </merge>

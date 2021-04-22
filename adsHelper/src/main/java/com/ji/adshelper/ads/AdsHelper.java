@@ -1,5 +1,6 @@
 package com.ji.adshelper.ads;
 
+import android.app.Activity;
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
@@ -9,16 +10,15 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 
 import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdLoader;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdSize;
 import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.InterstitialAd;
+import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.rewarded.RewardItem;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdCallback;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.ji.adshelper.view.NativeTemplateStyle;
 import com.ji.adshelper.view.TemplateView;
@@ -30,17 +30,16 @@ public class AdsHelper {
     // region banner
     public static void loadNative(View containerView, TemplateView templateView) {
         AdLoader adLoader = new AdLoader.Builder(containerView.getContext(), AdsSDK.nativeId)
-                .forUnifiedNativeAd(unifiedNativeAd -> {
+                .forNativeAd(nativeAd -> {
                     NativeTemplateStyle styles = new NativeTemplateStyle.Builder().build();
                     containerView.setVisibility(View.VISIBLE);
                     templateView.setVisibility(View.VISIBLE);
                     templateView.setStyles(styles);
-                    templateView.setNativeAd(unifiedNativeAd);
-
-                }).withAdListener(new AdListener() {
+                    templateView.setNativeAd(nativeAd);
+                })
+                .withAdListener(new com.google.android.gms.ads.AdListener() {
                     @Override
-                    public void onAdFailedToLoad(LoadAdError loadAdError) {
-                        super.onAdFailedToLoad(loadAdError);
+                    public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                         containerView.setVisibility(View.GONE);
                         templateView.setVisibility(View.GONE);
                     }
@@ -67,132 +66,107 @@ public class AdsHelper {
 
     public static <T> void loadInterstitialAd(@NonNull T target) {
         Context context = getContext(target);
-        InterstitialAd ins = new InterstitialAd(context);
-        ins.setAdUnitId(AdsSDK.interstitialId);
-        interstitialAdSet.put(target.hashCode(), ins);
+        InterstitialAd.load(context,
+                AdsSDK.interstitialId,
+                new AdRequest.Builder().build(),
+                new InterstitialAdLoadCallback() {
+                    @Override
+                    public void onAdLoaded(@NonNull InterstitialAd interstitialAd) {
+                        super.onAdLoaded(interstitialAd);
+                        interstitialAdSet.put(target.hashCode(), interstitialAd);
+                    }
 
-        ins.loadAd(new AdRequest.Builder().build());
+                    @Override
+                    public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                        super.onAdFailedToLoad(loadAdError);
+                    }
+                }
+        );
     }
 
     public static <T> void releaseInterstitialAd(@NonNull T target) {
         interstitialAdSet.remove(target.hashCode());
     }
 
-    public static <T> void showInterstitialAd(@NonNull T target, AdListener adListener) {
+    public static <T> void showInterstitialAd(@NonNull T target, boolean cacheNew, AdListener adListener) {
         InterstitialAd ins = interstitialAdSet.get(target.hashCode());
-        if (ins == null || !ins.isLoaded()) {
+        if (ins == null) {
             if (adListener != null) {
-                adListener.onAdFailedToLoad(null);
+                adListener.onAdLoadFailed();
             }
 
             loadInterstitialAd(target);
             return;
         }
 
-        ins.setAdListener(new AdListener() {
+        ins.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override
-            public void onAdClosed() {
-                super.onAdClosed();
-                ins.loadAd(new AdRequest.Builder().build()); // cache new
+            public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
+                super.onAdFailedToShowFullScreenContent(adError);
                 if (adListener != null) {
-                    adListener.onAdClosed();
+                    adListener.onAdLoadFailed();
                 }
+                interstitialAdSet.remove(target.hashCode());
+                if (cacheNew) loadInterstitialAd(target);
             }
 
             @Override
-            public void onAdFailedToLoad(LoadAdError loadAdError) {
-                super.onAdFailedToLoad(loadAdError);
-                if (adListener != null) {
-                    adListener.onAdFailedToLoad(loadAdError);
-                }
+            public void onAdShowedFullScreenContent() {
+                super.onAdShowedFullScreenContent();
             }
 
             @Override
-            public void onAdClicked() {
-                super.onAdClicked();
+            public void onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent();
                 if (adListener != null) {
-                    adListener.onAdClicked();
+                    adListener.onAdRewarded();
                 }
+
+                interstitialAdSet.remove(target.hashCode());
+                if (cacheNew) loadInterstitialAd(target);
             }
 
             @Override
             public void onAdImpression() {
                 super.onAdImpression();
-                if (adListener != null) {
-                    adListener.onAdImpression();
-                }
-            }
-
-            @Override
-            public void onAdLoaded() {
-                super.onAdLoaded();
-                if (adListener != null) {
-                    adListener.onAdLoaded();
-                }
-            }
-
-            @Override
-            public void onAdOpened() {
-                super.onAdOpened();
-                if (adListener != null) {
-                    adListener.onAdOpened();
-                }
             }
         });
-        ins.show();
+
+        ins.show(getActivity(target));
     }
 
     // endregion
     private static HashMap<Integer, RewardedAd> rewardAdSet = new HashMap<>();
 
     public static <T> void loadRewardAd(@NonNull T target) {
-        RewardedAd rewardedAd = new RewardedAd(getContext(target), AdsSDK.rewardedId);
-        rewardAdSet.put(target.hashCode(), rewardedAd);
-        rewardedAd.loadAd(new AdRequest.Builder().build(), new RewardedAdLoadCallback());
+        RewardedAd.load(getContext(target), AdsSDK.rewardedId, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull RewardedAd rewardedAd) {
+                super.onAdLoaded(rewardedAd);
+                rewardAdSet.put(target.hashCode(), rewardedAd);
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                super.onAdFailedToLoad(loadAdError);
+            }
+        });
     }
 
-    public static <T> void showRewardAd(@NonNull T target, RewardedAdCallback callback) {
+    public static <T> void showRewardAd(@NonNull T target, boolean cacheNew, AdListener adListener) {
         RewardedAd rewardedAd = rewardAdSet.get(target.hashCode());
-        if (rewardedAd == null || !rewardedAd.isLoaded()) {
-            if (callback != null) {
-                callback.onRewardedAdFailedToShow(null);
+        if (rewardedAd == null) {
+            if (adListener != null) {
+                adListener.onAdLoadFailed();
             }
             loadRewardAd(target);
             return;
         }
 
-        rewardedAd.show(getActivityFromTarget(target), new RewardedAdCallback() {
-            @Override
-            public void onUserEarnedReward(@NonNull RewardItem rewardItem) {
-                if (callback != null) {
-                    callback.onUserEarnedReward(rewardItem);
-                }
-            }
-
-            @Override
-            public void onRewardedAdClosed() {
-                super.onRewardedAdClosed();
-                rewardedAd.loadAd(new AdRequest.Builder().build(), new RewardedAdLoadCallback());
-                if (callback != null) {
-                    callback.onRewardedAdClosed();
-                }
-            }
-
-            @Override
-            public void onRewardedAdFailedToShow(AdError adError) {
-                super.onRewardedAdFailedToShow(adError);
-                if (callback != null) {
-                    callback.onRewardedAdFailedToShow(adError);
-                }
-            }
-
-            @Override
-            public void onRewardedAdOpened() {
-                super.onRewardedAdOpened();
-                if (callback != null) {
-                    callback.onRewardedAdOpened();
-                }
-            }
+        rewardedAd.show(getActivity(target), rewardItem -> {
+            adListener.onAdRewarded();
+            rewardAdSet.remove(target.hashCode());
+            if (cacheNew) loadRewardAd(target);
         });
     }
 
@@ -225,5 +199,21 @@ public class AdsHelper {
             throw new NullPointerException("Load reward ad null target");
         }
     }
+
+    private static <T> Activity getActivity(@NonNull T target) {
+        if (target instanceof Fragment) {
+            return ((Fragment) target).requireActivity();
+        } else if (target instanceof FragmentActivity) {
+            return (Activity) target;
+        } else {
+            throw new NullPointerException("Load interestitial ad null target");
+        }
+    }
     // endregion
+
+    public static abstract class AdListener {
+        public abstract void onAdLoadFailed();
+
+        public abstract void onAdRewarded();
+    }
 }

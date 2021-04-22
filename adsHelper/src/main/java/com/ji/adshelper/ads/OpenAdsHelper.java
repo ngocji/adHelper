@@ -14,6 +14,7 @@ import androidx.lifecycle.ProcessLifecycleOwner;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.google.android.gms.ads.AdError;
+import com.google.android.gms.ads.AdLoadCallback;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
@@ -29,7 +30,6 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
 
     private Context context;
     private AppOpenAd appOpenAd = null;
-    private AppOpenAd.AppOpenAdLoadCallback loadCallback;
     private boolean isLoadingAd = false;
     private boolean isShowingAd = false;
     private Activity currentActivity;
@@ -46,20 +46,6 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
     public OpenAdsHelper(Application application) {
         instance = this;
         context = application;
-        loadCallback = new AppOpenAd.AppOpenAdLoadCallback() {
-            /** Called when an app open ad has loaded */
-            @Override
-            public void onAppOpenAdLoaded(AppOpenAd ad) {
-                appOpenAd = ad;
-                isLoadingAd = false;
-            }
-
-            /** Called when an app open ad has failed to load */
-            @Override
-            public void onAppOpenAdFailedToLoad(LoadAdError loadAdError) {
-                isLoadingAd = false;
-            }
-        };
         application.registerActivityLifecycleCallbacks(this);
         ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
     }
@@ -73,7 +59,18 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
 
         isLoadingAd = true;
         AdRequest request = new AdRequest.Builder().build();
-        AppOpenAd.load(context, AdsSDK.openAdId, request, AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT, loadCallback);
+        AppOpenAd.load(context, AdsSDK.openAdId, request, AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT, new AppOpenAd.AppOpenAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull AppOpenAd appOpenAd) {
+                OpenAdsHelper.this.appOpenAd = appOpenAd;
+                isLoadingAd = false;
+            }
+
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                isLoadingAd = false;
+            }
+        });
     }
 
     public void showAdIfAvailable() {
@@ -99,7 +96,8 @@ public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, Li
                             isShowingAd = true;
                         }
                     };
-            appOpenAd.show(currentActivity, fullScreenContentCallback);
+            appOpenAd.setFullScreenContentCallback(fullScreenContentCallback);
+            appOpenAd.show(currentActivity);
         } else {
             //fetch a new ad if needed
             fetchAd();
