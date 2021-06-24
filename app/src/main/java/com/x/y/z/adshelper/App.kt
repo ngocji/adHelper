@@ -11,11 +11,11 @@ class App : Application() {
 
         AdsSDK.init(
             this,
-            getString(R.string.banner_ad_unit_id),
-            getString(R.string.goc_ad_unit_id),
-            "ca-app-pub-3940256099942544/1033173712",
-            getString(R.string.reward_ad_unit_id),
-            "ca-app-pub-3940256099942544/5662855259",
+            "",
+            "",
+            "",
+            "",
+            "",
             BuildConfig.DEBUG
         )
 
