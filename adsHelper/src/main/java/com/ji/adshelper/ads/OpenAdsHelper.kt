@@ -1,162 +1,122 @@
-package com.ji.adshelper.ads;
+package com.ji.adshelper.ads
 
-import android.app.Activity;
-import android.app.Application;
-import android.content.Context;
-import android.content.Intent;
-import android.os.Bundle;
+import android.app.Activity
+import android.app.Application
+import android.app.Application.ActivityLifecycleCallbacks
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.appopen.AppOpenAd
+import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
+import com.ji.adshelper.ads.OpenAdsHelper
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.lifecycle.LifecycleObserver;
-import androidx.lifecycle.OnLifecycleEvent;
-import androidx.lifecycle.ProcessLifecycleOwner;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+class OpenAdsHelper(private val application: Application) : ActivityLifecycleCallbacks, LifecycleObserver {
+    private var appOpenAd: AppOpenAd? = null
+    private var isLoadingAd = false
+    private var isShowingAd = false
+    private var currentActivity: Activity? = null
 
-import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdLoadCallback;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.appopen.AppOpenAd;
+    val isAdAvailable: Boolean get() = appOpenAd != null
 
-import static androidx.lifecycle.Lifecycle.Event.ON_START;
-
-public class OpenAdsHelper implements Application.ActivityLifecycleCallbacks, LifecycleObserver {
-    public static final String ACTION_CLOSE = "openAdsHelper_ActionClose";
-    public static final String ACTION_ERROR = "openAdsHelper_ActionError";
-
-    private static OpenAdsHelper instance;
-
-    private Context context;
-    private AppOpenAd appOpenAd = null;
-    private boolean isLoadingAd = false;
-    private boolean isShowingAd = false;
-    private Activity currentActivity;
-
-    public static OpenAdsHelper getInstance() {
-        if (instance == null) throw new NullPointerException("Open ad need init in application");
-        return instance;
-    }
-
-    public static void init(Application application) {
-        new OpenAdsHelper(application);
-    }
-
-    public OpenAdsHelper(Application application) {
-        instance = this;
-        context = application;
-        application.registerActivityLifecycleCallbacks(this);
-        ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
-    }
-
-
-    public void fetchAd() {
+    fun fetchAd() {
         // Fetch a new ad if we are not fetching them and there is no loaded ad available.
-        if (isAdAvailable() || isLoadingAd) {
-            return;
+        if (isAdAvailable || isLoadingAd) {
+            return
         }
-
-        isLoadingAd = true;
-        AdRequest request = new AdRequest.Builder().build();
-        AppOpenAd.load(context, AdsSDK.openAdId, request, AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT, new AppOpenAd.AppOpenAdLoadCallback() {
-            @Override
-            public void onAdLoaded(@NonNull AppOpenAd appOpenAd) {
-                OpenAdsHelper.this.appOpenAd = appOpenAd;
-                isLoadingAd = false;
+        isLoadingAd = true
+        val request = AdRequest.Builder().build()
+        AppOpenAd.load(application, AdsSDK.openAdId, request, AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT, object : AppOpenAdLoadCallback() {
+            override fun onAdLoaded(appOpenAd: AppOpenAd) {
+                this@OpenAdsHelper.appOpenAd = appOpenAd
+                isLoadingAd = false
             }
 
-            @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                isLoadingAd = false;
+            override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                isLoadingAd = false
             }
-        });
+        })
     }
 
-    public void showAdIfAvailable() {
+    fun showAdIfAvailable() {
         // Show ad if an ad is available and no open ad is showing currently
-        if (!isShowingAd && isAdAvailable()) {
-            FullScreenContentCallback fullScreenContentCallback =
-                    new FullScreenContentCallback() {
-                        @Override
-                        public void onAdDismissedFullScreenContent() {
-                            appOpenAd = null;
-                            isShowingAd = false;
-                            fetchAd();
-                            sendEvent(ACTION_CLOSE);
-                        }
+        if (!isShowingAd && isAdAvailable) {
+            val fullScreenContentCallback: FullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    appOpenAd = null
+                    isShowingAd = false
+                    fetchAd()
+                    sendEvent(ACTION_CLOSE)
+                }
 
-                        @Override
-                        public void onAdFailedToShowFullScreenContent(AdError adError) {
-                            sendEvent(ACTION_ERROR);
-                        }
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    sendEvent(ACTION_ERROR)
+                }
 
-                        @Override
-                        public void onAdShowedFullScreenContent() {
-                            isShowingAd = true;
-                        }
-                    };
-            appOpenAd.setFullScreenContentCallback(fullScreenContentCallback);
-            appOpenAd.show(currentActivity);
+                override fun onAdShowedFullScreenContent() {
+                    isShowingAd = true
+                }
+            }
+            appOpenAd?.fullScreenContentCallback = fullScreenContentCallback
+            appOpenAd?.show(currentActivity ?: return)
         } else {
             //fetch a new ad if needed
-            fetchAd();
-            sendEvent(ACTION_ERROR);
+            fetchAd()
+            sendEvent(ACTION_ERROR)
         }
     }
 
-    public boolean isAdAvailable() {
-        return appOpenAd != null;
+    // region override lifecycle
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+
+    override fun onActivityStarted(activity: Activity) {
+        currentActivity = activity
     }
 
-    // region override lifecycler
-    @Override
-    public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
+    override fun onActivityResumed(activity: Activity) {
+        currentActivity = activity
     }
 
-    @Override
-    public void onActivityStarted(@NonNull Activity activity) {
-        currentActivity = activity;
+    override fun onActivityPaused(activity: Activity) {}
+    override fun onActivityStopped(activity: Activity) {}
+    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+    override fun onActivityDestroyed(activity: Activity) {
+        currentActivity = null
     }
-
-    @Override
-    public void onActivityResumed(@NonNull Activity activity) {
-        currentActivity = activity;
-    }
-
-    @Override
-    public void onActivityPaused(@NonNull Activity activity) {
-
-    }
-
-    @Override
-    public void onActivityStopped(@NonNull Activity activity) {
-
-    }
-
-    @Override
-    public void onActivitySaveInstanceState(@NonNull Activity activity, @NonNull Bundle outState) {
-
-    }
-
-    @Override
-    public void onActivityDestroyed(@NonNull Activity activity) {
-        currentActivity = null;
-    }
-
 
     /**
      * LifecycleObserver methods
      */
-    @OnLifecycleEvent(ON_START)
-    public void onStart() {
+    @OnLifecycleEvent(Lifecycle.Event.ON_START)
+    fun onStart() {
         // automatically show an app open ad when the application starts or reopens from background
-        showAdIfAvailable();
+        showAdIfAvailable()
     }
 
     // endregion
+    private fun sendEvent(action: String) {
+        LocalBroadcastManager.getInstance(application).sendBroadcast(Intent(action))
+    }
 
-    private void sendEvent(String action) {
-        LocalBroadcastManager.getInstance(context).sendBroadcast(new Intent(action));
+    companion object {
+        const val ACTION_CLOSE = "openAdsHelper_ActionClose"
+        const val ACTION_ERROR = "openAdsHelper_ActionError"
+
+        fun init(application: Application): OpenAdsHelper {
+            return OpenAdsHelper(application)
+        }
+    }
+
+    init {
+        application.registerActivityLifecycleCallbacks(this)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 }
