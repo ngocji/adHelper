@@ -9,10 +9,10 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.ads.AdSize.BANNER
-import com.google.android.gms.ads.rewarded.RewardItem
 import com.ji.adshelper.ads.AdsHelper
 import com.ji.adshelper.ads.OpenAdsHelper
 import kotlinx.android.synthetic.main.activity_main.*
+import java.util.regex.Pattern
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         LocalBroadcastManager.getInstance(this)
-            .registerReceiver(object :BroadcastReceiver(){
+            .registerReceiver(object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     Log.e("RUn: ", "Action: ${intent?.action}")
                 }
@@ -46,5 +46,20 @@ class MainActivity : AppCompatActivity() {
                 addAction(OpenAdsHelper.ACTION_CLOSE)
                 addAction(OpenAdsHelper.ACTION_ERROR)
             })
+
+        lalal()
+    }
+
+    private fun lalal() {
+        val s = ""
+
+        val mPattern = Pattern.compile("#[a-zA-Z0-9]{6}")
+
+        val matcher = mPattern.matcher(s)
+        var from = 0
+        while (matcher.find(from)){
+            Log.e("OnMatch: ", matcher.group()+"/"+matcher.group(0)+"/"+matcher.start())
+            from++
+        }
     }
 }
