@@ -20,7 +20,11 @@ import java.util.*
 object AdsHelper {
     // region banner
     @JvmStatic
-    fun loadNative(containerView: View, templateView: TemplateView) {
+    fun loadNative(
+        containerView: View,
+        templateView: TemplateView,
+        onAdLoadListener: AdLoadListener? = null
+    ) {
         val adLoader = AdLoader.Builder(containerView.context, AdsSDK.nativeId)
             .forNativeAd { nativeAd ->
                 val styles = NativeTemplateStyle.Builder().build()
@@ -33,6 +37,11 @@ object AdsHelper {
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     containerView.visibility = View.GONE
                     templateView.visibility = View.GONE
+                    onAdLoadListener?.onAddFailed()
+                }
+
+                override fun onAdLoaded() {
+                    onAdLoadListener?.onAddLoaded()
                 }
             })
             .build()
@@ -40,11 +49,22 @@ object AdsHelper {
     }
 
     @JvmStatic
-    fun loadBanner(viewGroup: ViewGroup, adSize: AdSize) {
+    fun loadBanner(viewGroup: ViewGroup, adSize: AdSize, onAdLoadListener: AdLoadListener? = null) {
         val adView = AdView(viewGroup.context)
         adView.adUnitId = AdsSDK.bannerId
         adView.adSize = adSize
         viewGroup.addView(adView)
+        adView
+            .adListener = object : com.google.android.gms.ads.AdListener() {
+            override fun onAdFailedToLoad(p0: LoadAdError) {
+                onAdLoadListener?.onAddFailed()
+            }
+
+            override fun onAdLoaded() {
+                onAdLoadListener?.onAddLoaded()
+            }
+        }
+
         adView.loadAd(AdRequest.Builder().build())
     }
 
@@ -53,7 +73,7 @@ object AdsHelper {
     private val interstitialAdSet = HashMap<Int, InterstitialAd>()
 
     @JvmStatic
-    fun <T> loadInterstitialAd(target: T) {
+    fun <T> loadInterstitialAd(target: T, onAdLoadListener:AdLoadListener? = null) {
         val context = getContext(target) ?: return
 
         InterstitialAd.load(context,
@@ -63,10 +83,12 @@ object AdsHelper {
                 override fun onAdLoaded(interstitialAd: InterstitialAd) {
                     super.onAdLoaded(interstitialAd)
                     interstitialAdSet[target.hashCode()] = interstitialAd
+                    onAdLoadListener?.onAddLoaded()
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     super.onAdFailedToLoad(loadAdError)
+                    onAdLoadListener?.onAddFailed()
                 }
             }
         )
@@ -115,7 +137,7 @@ object AdsHelper {
     private val rewardAdSet = HashMap<Int, RewardedAd>()
 
     @JvmStatic
-    fun <T> loadRewardAd(target: T) {
+    fun <T> loadRewardAd(target: T, onAdLoadListener:AdLoadListener? = null) {
         val context = getContext(target) ?: return
         RewardedAd.load(
             context,
@@ -125,10 +147,12 @@ object AdsHelper {
                 override fun onAdLoaded(rewardedAd: RewardedAd) {
                     super.onAdLoaded(rewardedAd)
                     rewardAdSet[target.hashCode()] = rewardedAd
+                    onAdLoadListener?.onAddLoaded()
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     super.onAdFailedToLoad(loadAdError)
+                    onAdLoadListener?.onAddFailed()
                 }
             })
     }
@@ -177,5 +201,10 @@ object AdsHelper {
     abstract class AdListener {
         abstract fun onAdLoadFailed()
         abstract fun onAdRewarded()
+    }
+
+    abstract class AdLoadListener {
+        abstract fun onAddFailed()
+        abstract fun onAddLoaded()
     }
 }
