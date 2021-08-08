@@ -73,7 +73,7 @@ object AdsHelper {
     private val interstitialAdSet = HashMap<Int, InterstitialAd>()
 
     @JvmStatic
-    fun <T> loadInterstitialAd(target: T, onAdLoadListener:AdLoadListener? = null) {
+    fun <T> loadInterstitialAd(target: T, onAdLoadListener: AdLoadListener? = null) {
         val context = getContext(target) ?: return
 
         InterstitialAd.load(context,
@@ -133,11 +133,38 @@ object AdsHelper {
         ins.show(getActivity(target) ?: return)
     }
 
+    @JvmStatic
+    fun <T> showOneInterstitialAd(key: Context, target: T, adListener: AdListener?) {
+        val ins = interstitialAdSet[key.hashCode()] ?: return
+        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                super.onAdFailedToShowFullScreenContent(adError)
+                adListener?.onAdLoadFailed()
+                interstitialAdSet.remove(target.hashCode())
+            }
+
+            override fun onAdShowedFullScreenContent() {
+                super.onAdShowedFullScreenContent()
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent()
+                adListener?.onAdRewarded()
+                interstitialAdSet.remove(target.hashCode())
+            }
+
+            override fun onAdImpression() {
+                super.onAdImpression()
+            }
+        }
+        ins.show(getActivity(target) ?: return)
+    }
+
     // endregion
     private val rewardAdSet = HashMap<Int, RewardedAd>()
 
     @JvmStatic
-    fun <T> loadRewardAd(target: T, onAdLoadListener:AdLoadListener? = null) {
+    fun <T> loadRewardAd(target: T, onAdLoadListener: AdLoadListener? = null) {
         val context = getContext(target) ?: return
         RewardedAd.load(
             context,
@@ -184,6 +211,7 @@ object AdsHelper {
         return when (target) {
             is Fragment -> (target as Fragment).context
             is FragmentActivity -> target
+            is Context -> target
             else -> null
 
         }
