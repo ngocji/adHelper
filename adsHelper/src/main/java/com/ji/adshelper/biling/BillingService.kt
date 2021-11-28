@@ -20,7 +20,7 @@ import kotlin.math.min
 
 
 object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
-        SkuDetailsResponseListener {
+    SkuDetailsResponseListener {
 
     private const val TAG = "BillingService"
     private const val RECONNECT_TIMER_START_MILLISECONDS = 1L * 1000L
@@ -50,12 +50,12 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
     var billingRestoredListener: BillingRestoredListener? = null
 
     fun init(
-            app: Application,
-            nonConsumableSkus: List<String>,
-            consumableSkus: List<String>,
-            subscriptionSkus: List<String>,
-            publicKey: String?,
-            enableDebug: Boolean
+        app: Application,
+        nonConsumableSkus: List<String>,
+        consumableSkus: List<String>,
+        subscriptionSkus: List<String>,
+        publicKey: String?,
+        enableDebug: Boolean
     ) {
         if (isInit) return
         isInit = true
@@ -67,7 +67,7 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
         BillingService.enableDebug = enableDebug
 
         billingClient = BillingClient.newBuilder(app.applicationContext).setListener(this)
-                .enablePendingPurchases().build()
+            .enablePendingPurchases().build()
         billingClient?.startConnection(this)
 
         initializeSkuDetailLiveData()
@@ -120,7 +120,8 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
      */
     private fun retryBillingServiceConnectionWithExponentialBackoff() {
         handler.postDelayed({ billingClient?.startConnection(this) }, reconnectMilliseconds)
-        reconnectMilliseconds = min(reconnectMilliseconds * 2, RECONNECT_TIMER_MAX_TIME_MILLISECONDS)
+        reconnectMilliseconds =
+            min(reconnectMilliseconds * 2, RECONNECT_TIMER_MAX_TIME_MILLISECONDS)
     }
 
     /**
@@ -136,16 +137,16 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
 
         if (inAppSkus.isNotEmpty()) {
             val params = SkuDetailsParams.newBuilder()
-                    .setType(BillingClient.SkuType.INAPP)
-                    .setSkusList(inAppSkus)
-                    .build()
+                .setType(BillingClient.SkuType.INAPP)
+                .setSkusList(inAppSkus)
+                .build()
             billingClient?.querySkuDetailsAsync(params, this)
         }
         if (subscriptionSkus.isNotEmpty()) {
             val params = SkuDetailsParams.newBuilder()
-                    .setType(BillingClient.SkuType.SUBS)
-                    .setSkusList(subscriptionSkus)
-                    .build()
+                .setType(BillingClient.SkuType.SUBS)
+                .setSkusList(subscriptionSkus)
+                .build()
             billingClient?.querySkuDetailsAsync(params, this)
         }
     }
@@ -157,7 +158,10 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
      * Store the SkuDetails and post them in the [.skuDetailsLiveDataMap]. This allows other
      * parts of the app to use the [SkuDetails] to show SKU information and make purchases.
      */
-    override fun onSkuDetailsResponse(billingResult: BillingResult, skuDetailsList: List<SkuDetails>?) {
+    override fun onSkuDetailsResponse(
+        billingResult: BillingResult,
+        skuDetailsList: List<SkuDetails>?
+    ) {
         val responseCode = billingResult.responseCode
         val debugMessage = billingResult.debugMessage
         when (responseCode) {
@@ -198,7 +202,38 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
         log("Refreshing purchases started.")
     }
 
-    fun launchBillingFlow(activity: Activity, sku: String, billingFlowListener: BillingFlowListener?): Boolean {
+    fun getPurchases(
+        @BillingClient.SkuType type: String,
+        vararg skuIds: String
+    ): MutableLiveData<List<Purchase>> {
+        val data = MutableLiveData<List<Purchase>>()
+
+        billingClient?.queryPurchasesAsync(type) { result, purchases ->
+            val resultPurchase = mutableListOf<Purchase>()
+            when {
+                result.isOk() -> {
+                    purchases.forEach { purchase ->
+                        purchase.skus.forEach sub@{
+                            if (skuIds.contains(it)) {
+                                resultPurchase.add(purchase)
+                                return@sub
+                            }
+                        }
+                    }
+                }
+            }
+
+            data.postValue(resultPurchase)
+        }
+
+        return data
+    }
+
+    fun launchBillingFlow(
+        activity: Activity,
+        sku: String,
+        billingFlowListener: BillingFlowListener?
+    ): Boolean {
         BillingService.billingFlowListener = billingFlowListener
         val skuDetails = skuDetailsMap[sku]?.value ?: return false
         val params = BillingFlowParams.newBuilder().setSkuDetails(skuDetails).build()
@@ -224,7 +259,8 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
         if (billingResult.isOk() && purchases != null) {
             processPurchases(purchases, true)
         } else {
-            val isUserCancelled = billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED
+            val isUserCancelled =
+                billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED
             handler.post {
                 billingFlowListener?.onPurchaseError(isUserCancelled)
                 billingFlowListener = null
@@ -272,7 +308,8 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
 
     private fun Purchase.isConsumable(): Boolean {
         val hasConsumableSku = skus.any { consumableSkus.contains(it) }
-        val hasNonConsumableSku = skus.any { nonConsumableSkus.contains(it) || subscriptionSkus.contains(it) }
+        val hasNonConsumableSku =
+            skus.any { nonConsumableSkus.contains(it) || subscriptionSkus.contains(it) }
         return hasConsumableSku && !hasNonConsumableSku
     }
 
@@ -285,8 +322,8 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
     private fun consumePurchaseSync(purchase: Purchase): BillingResult {
         val blockingQueue = ArrayBlockingQueue<BillingResult>(1)
         val params = ConsumeParams.newBuilder()
-                .setPurchaseToken(purchase.purchaseToken)
-                .build()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
         billingClient?.consumeAsync(params) { billingResult: BillingResult, _: String ->
             blockingQueue.add(billingResult)
         }
@@ -297,8 +334,8 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
     private fun acknowledgePurchaseSync(purchase: Purchase): BillingResult {
         val blockingQueue = ArrayBlockingQueue<BillingResult>(1)
         val params = AcknowledgePurchaseParams.newBuilder()
-                .setPurchaseToken(purchase.purchaseToken)
-                .build()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
         billingClient?.acknowledgePurchase(params) { billingResult: BillingResult ->
             blockingQueue.add(billingResult)
         }
