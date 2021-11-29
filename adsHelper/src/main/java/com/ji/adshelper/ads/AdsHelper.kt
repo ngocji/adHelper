@@ -9,8 +9,6 @@ import androidx.fragment.app.FragmentActivity
 import com.google.android.gms.ads.*
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
-import com.google.android.gms.ads.nativead.NativeAd
-import com.google.android.gms.ads.rewarded.RewardItem
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.ji.adshelper.view.NativeTemplateStyle
@@ -71,6 +69,11 @@ object AdsHelper {
     // endregion
     // region interstitial
     private val interstitialAdSet = HashMap<Int, InterstitialAd>()
+
+    @JvmStatic
+    fun <T> isInterstitialAdLoaded(target: T): Boolean {
+        return interstitialAdSet[target.hashCode()] != null
+    }
 
     @JvmStatic
     fun <T> loadInterstitialAd(target: T, onAdLoadListener: AdLoadListener? = null) {
@@ -162,6 +165,11 @@ object AdsHelper {
 
     // endregion
     private val rewardAdSet = HashMap<Int, RewardedAd>()
+
+    @JvmStatic
+    fun <T> isRewardAdLoaded(target: T): Boolean {
+        return rewardAdSet[target.hashCode()] != null
+    }
 
     @JvmStatic
     fun <T> loadRewardAd(target: T, onAdLoadListener: AdLoadListener? = null) {
