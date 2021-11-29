@@ -194,9 +194,7 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
                     addAll(subPurchasedList)
                 }
 
-                if (purchases.isNotEmpty()) {
-                    processPurchases(purchases, false)
-                }
+                processPurchases(purchases, false)
             }
         }
         log("Refreshing purchases started.")
