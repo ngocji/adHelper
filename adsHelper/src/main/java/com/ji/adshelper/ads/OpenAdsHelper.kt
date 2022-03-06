@@ -3,7 +3,6 @@ package com.ji.adshelper.ads
 import android.app.Activity
 import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.lifecycle.Lifecycle
@@ -17,9 +16,9 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
-import com.ji.adshelper.ads.OpenAdsHelper
 
-class OpenAdsHelper(private val application: Application) : ActivityLifecycleCallbacks, LifecycleObserver {
+class OpenAdsHelper(private val application: Application) : ActivityLifecycleCallbacks,
+    LifecycleObserver {
     private var appOpenAd: AppOpenAd? = null
     private var isLoadingAd = false
     private var isShowingAd = false
@@ -27,44 +26,54 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
 
     val isAdAvailable: Boolean get() = appOpenAd != null
 
-    fun fetchAd() {
+    fun fetchAd(onAdListener: OnAdListener? = null) {
         // Fetch a new ad if we are not fetching them and there is no loaded ad available.
         if (isAdAvailable || isLoadingAd) {
             return
         }
         isLoadingAd = true
         val request = AdRequest.Builder().build()
-        AppOpenAd.load(application, AdsSDK.openAdId, request, AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT, object : AppOpenAdLoadCallback() {
-            override fun onAdLoaded(appOpenAd: AppOpenAd) {
-                this@OpenAdsHelper.appOpenAd = appOpenAd
-                isLoadingAd = false
-            }
+        AppOpenAd.load(
+            application,
+            AdsSDK.openAdId,
+            request,
+            AppOpenAd.APP_OPEN_AD_ORIENTATION_PORTRAIT,
+            object : AppOpenAdLoadCallback() {
+                override fun onAdLoaded(appOpenAd: AppOpenAd) {
+                    this@OpenAdsHelper.appOpenAd = appOpenAd
+                    isLoadingAd = false
+                    onAdListener?.onAdLoaded()
+                }
 
-            override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                isLoadingAd = false
-            }
-        })
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    isLoadingAd = false
+                    onAdListener?.onAdLoadFailed(loadAdError.code)
+                }
+            })
     }
 
-    fun showAdIfAvailable() {
+    fun showAdIfAvailable(adListener: OnAdListener? = null) {
         // Show ad if an ad is available and no open ad is showing currently
         if (!isShowingAd && isAdAvailable) {
-            val fullScreenContentCallback: FullScreenContentCallback = object : FullScreenContentCallback() {
-                override fun onAdDismissedFullScreenContent() {
-                    appOpenAd = null
-                    isShowingAd = false
-                    fetchAd()
-                    sendEvent(ACTION_CLOSE)
-                }
+            val fullScreenContentCallback: FullScreenContentCallback =
+                object : FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() {
+                        appOpenAd = null
+                        isShowingAd = false
+                        fetchAd()
+                        sendEvent(ACTION_CLOSE)
+                        adListener?.onAdClosed()
+                    }
 
-                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                    sendEvent(ACTION_ERROR)
-                }
+                    override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                        sendEvent(ACTION_ERROR)
+                        adListener?.onAdLoadFailed(adError.code)
+                    }
 
-                override fun onAdShowedFullScreenContent() {
-                    isShowingAd = true
+                    override fun onAdShowedFullScreenContent() {
+                        isShowingAd = true
+                    }
                 }
-            }
             appOpenAd?.fullScreenContentCallback = fullScreenContentCallback
             appOpenAd?.show(currentActivity ?: return)
         } else {
@@ -110,6 +119,7 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
         const val ACTION_CLOSE = "openAdsHelper_ActionClose"
         const val ACTION_ERROR = "openAdsHelper_ActionError"
 
+        @JvmStatic
         fun init(application: Application): OpenAdsHelper {
             return OpenAdsHelper(application)
         }
