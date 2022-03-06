@@ -1,7 +1,7 @@
 package com.ji.adshelper.ads
 
 abstract class OnAdListener {
-    fun onAdLoadFailed(code: Int) {}
-    fun onAdLoaded() {}
-    fun onAdClosed() {}
+    open fun onAdLoadFailed(code: Int) {}
+    open fun onAdLoaded() {}
+    open fun onAdClosed() {}
 }
