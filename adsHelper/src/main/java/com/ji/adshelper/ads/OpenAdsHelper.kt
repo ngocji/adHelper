@@ -23,6 +23,7 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     private var isLoadingAd = false
     private var isShowingAd = false
     private var currentActivity: Activity? = null
+    private var validShowAds: ((Activity?) -> Boolean)? = null
 
     val isAdAvailable: Boolean get() = appOpenAd != null
     var pendingShowAds = false
@@ -119,12 +120,18 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
             pendingShowAds = false
             return
         }
+
+        if (validShowAds != null && validShowAds?.invoke(currentActivity) == false) return
         showAdIfAvailable()
     }
 
     // endregion
     private fun sendEvent(action: String) {
         LocalBroadcastManager.getInstance(application).sendBroadcast(Intent(action))
+    }
+
+    fun setValidShowAds(action: (Activity?) -> Boolean) {
+        validShowAds = action
     }
 
     companion object {
