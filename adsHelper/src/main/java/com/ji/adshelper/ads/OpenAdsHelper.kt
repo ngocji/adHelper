@@ -25,12 +25,20 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     private var currentActivity: Activity? = null
 
     val isAdAvailable: Boolean get() = appOpenAd != null
+    var pendingShowAds = false
 
     fun fetchAd(onAdListener: OnAdListener? = null) {
         // Fetch a new ad if we are not fetching them and there is no loaded ad available.
-        if (isAdAvailable || isLoadingAd) {
+        if (isAdAvailable) {
+            onAdListener?.onAdLoaded()
             return
         }
+
+        if (isLoadingAd) {
+            onAdListener?.onAdLoading()
+            return
+        }
+
         isLoadingAd = true
         val request = AdRequest.Builder().build()
         AppOpenAd.load(
@@ -78,7 +86,7 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
             appOpenAd?.show(currentActivity ?: return)
         } else {
             //fetch a new ad if needed
-            fetchAd()
+            fetchAd(adListener)
             sendEvent(ACTION_ERROR)
         }
     }
@@ -107,6 +115,10 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     @OnLifecycleEvent(Lifecycle.Event.ON_START)
     fun onStart() {
         // automatically show an app open ad when the application starts or reopens from background
+        if (pendingShowAds) {
+            pendingShowAds = false
+            return
+        }
         showAdIfAvailable()
     }
 
