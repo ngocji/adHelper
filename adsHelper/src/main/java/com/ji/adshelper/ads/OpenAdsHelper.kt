@@ -93,7 +93,9 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     }
 
     // region override lifecycle
-    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        currentActivity = activity
+    }
 
     override fun onActivityStarted(activity: Activity) {
         currentActivity = activity
@@ -107,7 +109,9 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     override fun onActivityStopped(activity: Activity) {}
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityDestroyed(activity: Activity) {
-        currentActivity = null
+        if (currentActivity == activity) {
+            currentActivity = null
+        }
     }
 
     /**
