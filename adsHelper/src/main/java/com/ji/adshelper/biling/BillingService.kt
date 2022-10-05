@@ -10,8 +10,7 @@ import androidx.annotation.WorkerThread
 import com.android.billingclient.api.*
 import com.ji.adshelper.biling.entities.DataWrappers
 import com.ji.adshelper.biling.extension.*
-import com.ji.adshelper.biling.listener.PurchaseServiceListener
-import com.ji.adshelper.biling.listener.SubscriptionServiceListener
+import com.ji.adshelper.biling.listener.BillingServiceListener
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
@@ -26,8 +25,8 @@ object BillingService {
     private val productDetailsMap = mutableMapOf<String, ProductDetails?>()
     private val handler = Handler(Looper.getMainLooper())
     private val backgroundExecutor by lazy { Executors.newSingleThreadExecutor() }
-    private var purchaseServiceListener: PurchaseServiceListener? = null
-    private var subscriptionServiceListener: SubscriptionServiceListener? = null
+
+    private var billingServiceListener: BillingServiceListener? = null
 
     private val purchasesUpdatedListener =
         PurchasesUpdatedListener { billingResult, purchases ->
@@ -108,10 +107,14 @@ object BillingService {
         billingClient?.startConnection(billingClientStateListener)
     }
 
+    @JvmStatic
+    fun setListener(listener: BillingServiceListener) {
+        this.billingServiceListener = listener
+    }
+
     private fun updatePrices(iapKeyPrices: Map<String, DataWrappers.ProductDetails>) {
         handler.post {
-            purchaseServiceListener?.onPricesUpdated(iapKeyPrices)
-            subscriptionServiceListener?.onPricesUpdated(iapKeyPrices)
+            billingServiceListener?.onPricesUpdated(iapKeyPrices)
         }
     }
 
@@ -256,9 +259,9 @@ object BillingService {
     private fun productOwned(purchaseInfo: DataWrappers.PurchaseInfo, isRestore: Boolean) {
         handler.post {
             if (isRestore) {
-                purchaseServiceListener?.onProductRestored(purchaseInfo)
+                billingServiceListener?.onProductRestored(purchaseInfo)
             } else {
-                purchaseServiceListener?.onProductPurchased(purchaseInfo)
+                billingServiceListener?.onProductPurchased(purchaseInfo)
             }
         }
     }
@@ -266,9 +269,9 @@ object BillingService {
     private fun subscriptionOwned(purchaseInfo: DataWrappers.PurchaseInfo, isRestore: Boolean) {
         handler.post {
             if (isRestore) {
-                subscriptionServiceListener?.onSubscriptionRestored(purchaseInfo)
+                billingServiceListener?.onProductRestored(purchaseInfo)
             } else {
-                subscriptionServiceListener?.onSubscriptionPurchased(purchaseInfo)
+                billingServiceListener?.onProductPurchased(purchaseInfo)
             }
         }
     }
