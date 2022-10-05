@@ -112,6 +112,22 @@ object BillingService {
         this.billingServiceListener = listener
     }
 
+
+    @JvmStatic
+    fun queryPurchasedInfo(
+        @BillingClient.ProductType type: String,
+        id: String,
+        action: (DataWrappers.PurchaseInfo) -> Unit
+    ) {
+        billingClient?.queryPurchasesAsync(type.getQueryPurchasesParams()) { result, purchases ->
+            if (result.isOk()) {
+                purchases.find { it.products.contains(id) }?.also {
+                    action.invoke(it.getPurchaseInfo())
+                }
+            }
+        }
+    }
+
     private fun updatePrices(iapKeyPrices: Map<String, DataWrappers.ProductDetails>) {
         handler.post {
             billingServiceListener?.onPricesUpdated(iapKeyPrices)
