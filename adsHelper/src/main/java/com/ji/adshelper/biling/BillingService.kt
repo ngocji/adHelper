@@ -20,6 +20,7 @@ object BillingService {
     private const val TAG = "BillingService"
     private var billingClient: BillingClient? = null
     private var nonConsumableSkus: List<String> = emptyList()
+    private var consumableSkus: List<String> = emptyList()
     private var subscriptionSkus: List<String> = emptyList()
     private var decodedKey: String? = null
     private val productDetailsMap = mutableMapOf<String, ProductDetails?>()
@@ -91,11 +92,13 @@ object BillingService {
     @JvmStatic
     fun init(
         app: Application,
-        nonConsumableSkus: List<String>,
-        subscriptionSkus: List<String>,
+        nonConsumableSkus: List<String> = emptyList(),
+        consumableSkus: List<String> = emptyList(),
+        subscriptionSkus: List<String> = emptyList(),
         decodedKey: String?,
     ) {
         BillingService.nonConsumableSkus = nonConsumableSkus
+        BillingService.consumableSkus = consumableSkus
         BillingService.subscriptionSkus = subscriptionSkus
         BillingService.decodedKey = decodedKey
 
@@ -114,8 +117,13 @@ object BillingService {
 
 
     private fun querySkuDetailsAsync() {
-        if (nonConsumableSkus.isNotEmpty()) {
-            val products = getProduct(BillingClient.ProductType.INAPP, nonConsumableSkus)
+        if (nonConsumableSkus.isNotEmpty() || consumableSkus.isNotEmpty()) {
+            val productIds = mutableListOf<String>().apply {
+                addAll(nonConsumableSkus)
+                addAll(consumableSkus)
+            }
+
+            val products = getProduct(BillingClient.ProductType.INAPP, productIds)
             val params = QueryProductDetailsParams.newBuilder().setProductList(products)
             billingClient?.queryProductDetailsAsync(params.build(), productDetailsResponse)
         }
@@ -184,9 +192,15 @@ object BillingService {
                     }
                 }
 
-                if (!purchase.isAcknowledged) {
-                    val result = acknowledgePurchaseSync(purchase)
-                    if (!result.isOk()) return@forEach
+                when {
+                    purchase.isConsumable() -> {
+                        val result = consumePurchaseSync(purchase)
+                        if (!result.isOk()) return@forEach
+                    }
+                    !purchase.isAcknowledged -> {
+                        val result = acknowledgePurchaseSync(purchase)
+                        if (!result.isOk()) return@forEach
+                    }
                 }
             }
         }
@@ -272,6 +286,29 @@ object BillingService {
             blockingQueue.add(billingResult)
         }
         return blockingQueue.take()
+    }
+
+
+    /**
+     * If the state is PURCHASED, consume the purchase if it hasn't been acknowledged yet.
+     */
+    @WorkerThread
+    private fun consumePurchaseSync(purchase: Purchase): BillingResult {
+        val blockingQueue = ArrayBlockingQueue<BillingResult>(1)
+        val params = ConsumeParams.newBuilder()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
+        billingClient?.consumeAsync(params) { billingResult: BillingResult, _: String ->
+            blockingQueue.add(billingResult)
+        }
+        return blockingQueue.take()
+    }
+
+    private fun Purchase.isConsumable(): Boolean {
+        val hasConsumableSku = products.any { consumableSkus.contains(it) }
+        val hasNonConsumableSku =
+            products.any { nonConsumableSkus.contains(it) || subscriptionSkus.contains(it) }
+        return hasConsumableSku && !hasNonConsumableSku
     }
 
     fun getProductDetails() = productDetailsMap
