@@ -32,8 +32,8 @@ object BillingService {
         PurchasesUpdatedListener { billingResult, purchases ->
             if (billingResult.isOk() && purchases != null) {
                 processPurchases(purchases)
-            } else if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
-                Timer("$TAG: onPurchasesUpdated: User canceled the purchase")
+            } else {
+                billingServiceListener?.onPurchaseError(billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED)
             }
         }
 

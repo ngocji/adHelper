@@ -10,4 +10,6 @@ interface BillingServiceListener {
     fun onProductPurchased(purchaseInfo: DataWrappers.PurchaseInfo) {}
 
     fun onProductRestored(purchaseInfo: DataWrappers.PurchaseInfo) {}
+
+    fun onPurchaseError(isUserCancelled: Boolean) {}
 }
