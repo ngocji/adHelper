@@ -1,8 +1,8 @@
 package com.ji.adshelper.biling.extension
 
 import com.android.billingclient.api.*
-import com.ji.adshelper.biling.entities.DataWrappers
 import com.ji.adshelper.biling.Security
+import com.ji.adshelper.biling.entities.DataWrappers
 
 fun Purchase.getPurchaseInfo(): DataWrappers.PurchaseInfo {
     return DataWrappers.PurchaseInfo(
@@ -27,7 +27,9 @@ fun ProductDetails.toMapSUBS() = this.run {
         description = description,
         priceCurrencyCode = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceCurrencyCode,
         price = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice,
-        priceAmount = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceAmountMicros?.div(1000000.0)
+        priceAmount = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceAmountMicros?.div(
+            1000000.0
+        )
     )
 }
 
@@ -49,7 +51,7 @@ fun BillingResult.isOk(): Boolean {
 
 fun String?.isSignatureValid(purchase: Purchase): Boolean {
     val key = this ?: return true
-    return Security.verifyPurchase(key, purchase.originalJson, purchase.signature)
+    return Security.verifyPurchase(purchase.originalJson, purchase.signature, key)
 }
 
 fun String.getQueryPurchasesParams(): QueryPurchasesParams {
