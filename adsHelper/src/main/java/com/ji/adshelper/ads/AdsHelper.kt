@@ -50,7 +50,7 @@ object AdsHelper {
     fun loadBanner(viewGroup: ViewGroup, adSize: AdSize, onAdLoadListener: AdLoadListener? = null) {
         val adView = AdView(viewGroup.context)
         adView.adUnitId = AdsSDK.bannerId
-        adView.adSize = adSize
+        adView.setAdSize(adSize)
         viewGroup.addView(adView)
         adView
             .adListener = object : com.google.android.gms.ads.AdListener() {

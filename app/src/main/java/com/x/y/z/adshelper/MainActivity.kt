@@ -7,7 +7,6 @@ import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.ads.AdSize.BANNER
 import com.ji.adshelper.ads.AdsHelper
 import com.ji.adshelper.ads.OpenAdsHelper
@@ -37,15 +36,15 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        LocalBroadcastManager.getInstance(this)
-            .registerReceiver(object : BroadcastReceiver() {
-                override fun onReceive(context: Context?, intent: Intent?) {
-                    Log.e("RUn: ", "Action: ${intent?.action}")
-                }
-            }, IntentFilter().apply {
-                addAction(OpenAdsHelper.ACTION_CLOSE)
-                addAction(OpenAdsHelper.ACTION_ERROR)
-            })
+//        LocalBroadcastManager.getInstance(this)
+//            .registerReceiver(object : BroadcastReceiver() {
+//                override fun onReceive(context: Context?, intent: Intent?) {
+//                    Log.e("RUn: ", "Action: ${intent?.action}")
+//                }
+//            }, IntentFilter().apply {
+//                addAction(OpenAdsHelper.ACTION_CLOSE)
+//                addAction(OpenAdsHelper.ACTION_ERROR)
+//            })
 
         lalal()
     }

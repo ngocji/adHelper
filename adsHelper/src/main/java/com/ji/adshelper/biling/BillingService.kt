@@ -6,184 +6,208 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
-import android.util.Log
-import androidx.annotation.MainThread
 import androidx.annotation.WorkerThread
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Transformations
 import com.android.billingclient.api.*
+import com.ji.adshelper.biling.entities.DataWrappers
+import com.ji.adshelper.biling.extension.*
+import com.ji.adshelper.biling.listener.PurchaseServiceListener
+import com.ji.adshelper.biling.listener.SubscriptionServiceListener
+import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
-import kotlin.math.min
 
-
-object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
-    SkuDetailsResponseListener {
-
+object BillingService {
     private const val TAG = "BillingService"
-    private const val RECONNECT_TIMER_START_MILLISECONDS = 1L * 1000L
-    private const val RECONNECT_TIMER_MAX_TIME_MILLISECONDS = 1000L * 60L * 15L // 15 mins
-    private const val SKU_DETAILS_REQUERY_TIME = 1000L * 60L * 60L * 4L // 4 hours
-
-    private var isInit = false
     private var billingClient: BillingClient? = null
     private var nonConsumableSkus: List<String> = emptyList()
-    private var consumableSkus: List<String> = emptyList()
     private var subscriptionSkus: List<String> = emptyList()
-    private var publicKey: String? = null
-    private var enableDebug: Boolean = false
-
+    private var decodedKey: String? = null
+    private val productDetailsMap = mutableMapOf<String, ProductDetails?>()
     private val handler = Handler(Looper.getMainLooper())
     private val backgroundExecutor by lazy { Executors.newSingleThreadExecutor() }
+    private var purchaseServiceListener: PurchaseServiceListener? = null
+    private var subscriptionServiceListener: SubscriptionServiceListener? = null
 
-    // how long before the data source tries to reconnect to Google play
-    private var reconnectMilliseconds = RECONNECT_TIMER_START_MILLISECONDS
+    private val purchasesUpdatedListener =
+        PurchasesUpdatedListener { billingResult, purchases ->
+            if (billingResult.isOk() && purchases != null) {
+                processPurchases(purchases)
+            } else if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
+                Timer("$TAG: onPurchasesUpdated: User canceled the purchase")
+            }
+        }
 
-    // when was the last successful SkuDetailsResponse?
-    private var skuDetailsResponseTime = -SKU_DETAILS_REQUERY_TIME
+    private val billingClientStateListener =
+        object : BillingClientStateListener {
+            override fun onBillingSetupFinished(billingResult: BillingResult) {
+                val responseCode = billingResult.responseCode
+                val debugMessage = billingResult.debugMessage
+                Timer("$TAG: $responseCode $debugMessage")
+                when {
+                    billingResult.isOk() -> {
+                        querySkuDetailsAsync()
+                        refreshPurchasesAsync()
+                    }
+                    else -> {}
+                }
+            }
 
-    private val skuDetailsMap = mutableMapOf<String, MutableLiveData<SkuDetails>>()
+            override fun onBillingServiceDisconnected() {
+                Timer("$TAG: onBillingServiceDisconnected: disconnect service")
+            }
+        }
 
-    private var billingFlowListener: BillingFlowListener? = null
-    var billingRestoredListener: BillingRestoredListener? = null
 
+    private val productDetailsResponse =
+        ProductDetailsResponseListener { billingResult, productDetailsList ->
+            val responseCode = billingResult.responseCode
+            val debugMessage = billingResult.debugMessage
+            Timer("$TAG: $responseCode $debugMessage")
+            when {
+                billingResult.isOk() -> {
+                    productDetailsList.forEach { item ->
+                        productDetailsMap[item.productId] = item
+                    }
+
+                    productDetailsMap.mapNotNull { entry ->
+                        entry.value?.let {
+                            when (it.productType) {
+                                BillingClient.ProductType.SUBS -> {
+                                    entry.key to it.toMapSUBS()
+                                }
+                                else -> {
+                                    entry.key to it.toMap()
+                                }
+                            }
+                        }
+                    }.let {
+                        updatePrices(it.toMap())
+                    }
+                }
+                else -> {}
+            }
+        }
+
+    @JvmStatic
     fun init(
         app: Application,
         nonConsumableSkus: List<String>,
-        consumableSkus: List<String>,
         subscriptionSkus: List<String>,
-        publicKey: String?,
-        enableDebug: Boolean
+        decodedKey: String?,
     ) {
-        if (isInit) return
-        isInit = true
-
         BillingService.nonConsumableSkus = nonConsumableSkus
-        BillingService.consumableSkus = consumableSkus
         BillingService.subscriptionSkus = subscriptionSkus
-        BillingService.publicKey = publicKey
-        BillingService.enableDebug = enableDebug
+        BillingService.decodedKey = decodedKey
 
-        billingClient = BillingClient.newBuilder(app.applicationContext).setListener(this)
-            .enablePendingPurchases().build()
-        billingClient?.startConnection(this)
-
-        initializeSkuDetailLiveData()
+        billingClient =
+            BillingClient.newBuilder(app.applicationContext).setListener(purchasesUpdatedListener)
+                .enablePendingPurchases().build()
+        billingClient?.startConnection(billingClientStateListener)
     }
 
-    private fun initializeSkuDetailLiveData() {
-        val allSkus = mutableListOf<String>().apply {
-            addAll(nonConsumableSkus)
-            addAll(consumableSkus)
-            addAll(subscriptionSkus)
+    private fun updatePrices(iapKeyPrices: Map<String, DataWrappers.ProductDetails>) {
+        handler.post {
+            purchaseServiceListener?.onPricesUpdated(iapKeyPrices)
+            subscriptionServiceListener?.onPricesUpdated(iapKeyPrices)
         }
-        for (sku in allSkus) {
-            skuDetailsMap[sku] = object : MutableLiveData<SkuDetails>() {
-                override fun onActive() {
-                    if (SystemClock.elapsedRealtime() - skuDetailsResponseTime > SKU_DETAILS_REQUERY_TIME) {
-                        skuDetailsResponseTime = SystemClock.elapsedRealtime()
-                        log("Skus not fresh, re-querying ...")
-                        querySkuDetailsAsync()
+    }
+
+
+    private fun querySkuDetailsAsync() {
+        if (nonConsumableSkus.isNotEmpty()) {
+            val products = getProduct(BillingClient.ProductType.INAPP, nonConsumableSkus)
+            val params = QueryProductDetailsParams.newBuilder().setProductList(products)
+            billingClient?.queryProductDetailsAsync(params.build(), productDetailsResponse)
+        }
+
+        if (subscriptionSkus.isNotEmpty()) {
+            val products = getProduct(BillingClient.ProductType.SUBS, subscriptionSkus)
+            val params = QueryProductDetailsParams.newBuilder().setProductList(products)
+            billingClient?.queryProductDetailsAsync(params.build(), productDetailsResponse)
+        }
+    }
+
+
+    private fun getProduct(
+        productType: String,
+        skus: List<String>
+    ): List<QueryProductDetailsParams.Product> {
+        val productList = mutableListOf<QueryProductDetailsParams.Product>()
+        if (skus.isNotEmpty()) {
+            skus.forEach {
+                productList.add(
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(it)
+                        .setProductType(productType)
+                        .build()
+                )
+            }
+        }
+        return productList
+    }
+
+    fun launchBillingFlow(activity: Activity, productId: String): Boolean {
+        val productDetails = productDetailsMap[productId] ?: return false
+        val offerToken = productDetails.subscriptionOfferDetails?.get(0)?.offerToken ?: ""
+        val productDetailsParamsList =
+            listOf(
+                BillingFlowParams.ProductDetailsParams.newBuilder()
+                    .setProductDetails(productDetails)
+                    .setOfferToken(offerToken)
+                    .build()
+            )
+        val billingFlowParams =
+            BillingFlowParams.newBuilder()
+                .setProductDetailsParamsList(productDetailsParamsList)
+                .build()
+        return billingClient?.launchBillingFlow(activity, billingFlowParams)?.isOk() ?: false
+    }
+
+    private fun processPurchases(purchases: List<Purchase>, isRestore: Boolean = false) {
+        backgroundExecutor.execute {
+            purchases.forEach { purchase ->
+                if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
+                    return@forEach
+                }
+                if (!decodedKey.isSignatureValid(purchase)) {
+                    Timer("$TAG: Invalid signature on purchase. Check to make sure your public key is correct.")
+                    return@forEach
+                }
+                // Grant entitlement to the user.
+                val productDetails = productDetailsMap[purchase.products[0]]
+                when (productDetails?.productType) {
+                    BillingClient.ProductType.INAPP -> {
+                        productOwned(purchase.getPurchaseInfo(), isRestore)
+                    }
+                    BillingClient.ProductType.SUBS -> {
+                        subscriptionOwned(purchase.getPurchaseInfo(), isRestore)
                     }
                 }
-            }
-        }
-    }
 
-    override fun onBillingSetupFinished(billingResult: BillingResult) {
-        val responseCode = billingResult.responseCode
-        val debugMessage = billingResult.debugMessage
-        log("onBillingSetupFinished: $responseCode $debugMessage")
-
-        when (responseCode) {
-            BillingClient.BillingResponseCode.OK -> {
-                // The billing client is ready. You can query purchases here.
-                // This doesn't mean that your app is set up correctly in the console -- it just
-                // means that you have a connection to the Billing service.
-                reconnectMilliseconds = RECONNECT_TIMER_START_MILLISECONDS
-                querySkuDetailsAsync()
-                refreshPurchasesAsync()
-            }
-            else -> retryBillingServiceConnectionWithExponentialBackoff()
-        }
-    }
-
-    override fun onBillingServiceDisconnected() {
-        retryBillingServiceConnectionWithExponentialBackoff()
-    }
-
-    /**
-     * Retries the billing service connection with exponential backoff, maxing out at the time
-     * specified by RECONNECT_TIMER_MAX_TIME_MILLISECONDS.
-     */
-    private fun retryBillingServiceConnectionWithExponentialBackoff() {
-        handler.postDelayed({ billingClient?.startConnection(this) }, reconnectMilliseconds)
-        reconnectMilliseconds =
-            min(reconnectMilliseconds * 2, RECONNECT_TIMER_MAX_TIME_MILLISECONDS)
-    }
-
-    /**
-     * Calls the billing client functions to query sku details for both the inapp and subscription
-     * SKUs. SKU details are useful for displaying item names and price lists to the user, and are
-     * required to make a purchase.
-     */
-    private fun querySkuDetailsAsync() {
-        val inAppSkus = mutableListOf<String>().apply {
-            addAll(nonConsumableSkus)
-            addAll(consumableSkus)
-        }
-
-        if (inAppSkus.isNotEmpty()) {
-            val params = SkuDetailsParams.newBuilder()
-                .setType(BillingClient.SkuType.INAPP)
-                .setSkusList(inAppSkus)
-                .build()
-            billingClient?.querySkuDetailsAsync(params, this)
-        }
-        if (subscriptionSkus.isNotEmpty()) {
-            val params = SkuDetailsParams.newBuilder()
-                .setType(BillingClient.SkuType.SUBS)
-                .setSkusList(subscriptionSkus)
-                .build()
-            billingClient?.querySkuDetailsAsync(params, this)
-        }
-    }
-
-    /**
-     * Receives the result from [.querySkuDetailsAsync]}.
-     *
-     *
-     * Store the SkuDetails and post them in the [.skuDetailsLiveDataMap]. This allows other
-     * parts of the app to use the [SkuDetails] to show SKU information and make purchases.
-     */
-    override fun onSkuDetailsResponse(
-        billingResult: BillingResult,
-        skuDetailsList: List<SkuDetails>?
-    ) {
-        val responseCode = billingResult.responseCode
-        val debugMessage = billingResult.debugMessage
-        when (responseCode) {
-            BillingClient.BillingResponseCode.OK -> {
-                skuDetailsResponseTime = SystemClock.elapsedRealtime()
-                log("onSkuDetailsResponse: $responseCode $debugMessage")
-                skuDetailsList?.forEach { skuDetails ->
-                    skuDetailsMap[skuDetails.sku]?.postValue(skuDetails)
+                if (!purchase.isAcknowledged) {
+                    val result = acknowledgePurchaseSync(purchase)
+                    if (!result.isOk()) return@forEach
                 }
             }
-            else -> skuDetailsResponseTime = -SKU_DETAILS_REQUERY_TIME
         }
     }
 
-    fun refreshPurchasesAsync() {
-        billingClient?.queryPurchasesAsync(BillingClient.SkuType.INAPP) { inAppResult, inAppPurchases ->
+    fun restorePurchase() {
+        refreshPurchasesAsync()
+    }
+
+    private fun refreshPurchasesAsync() {
+        billingClient?.queryPurchasesAsync(
+            BillingClient.ProductType.INAPP.getQueryPurchasesParams()
+        ) { inAppResult, inAppPurchases ->
             val inAppPurchasedList = when {
                 inAppResult.isOk() -> inAppPurchases
                 else -> emptyList()
             }
 
-            billingClient?.queryPurchasesAsync(BillingClient.SkuType.SUBS) { subResult, subPurchases ->
+            billingClient?.queryPurchasesAsync(
+                BillingClient.ProductType.SUBS.getQueryPurchasesParams()
+            ) { subResult, subPurchases ->
                 val subPurchasedList = when {
                     subResult.isOk() -> subPurchases
                     else -> emptyList()
@@ -194,49 +218,9 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
                     addAll(subPurchasedList)
                 }
 
-                processPurchases(purchases, false)
+                processPurchases(purchases, true)
             }
         }
-        log("Refreshing purchases started.")
-    }
-
-    fun getPurchases(
-        @BillingClient.SkuType type: String,
-        vararg skuIds: String
-    ): MutableLiveData<List<Purchase>> {
-        val data = MutableLiveData<List<Purchase>>()
-
-        billingClient?.queryPurchasesAsync(type) { result, purchases ->
-            val resultPurchase = mutableListOf<Purchase>()
-            when {
-                result.isOk() -> {
-                    purchases.forEach { purchase ->
-                        purchase.skus.forEach sub@{
-                            if (skuIds.contains(it)) {
-                                resultPurchase.add(purchase)
-                                return@sub
-                            }
-                        }
-                    }
-                }
-            }
-
-            data.postValue(resultPurchase)
-        }
-
-        return data
-    }
-
-    fun launchBillingFlow(
-        activity: Activity,
-        sku: String,
-        billingFlowListener: BillingFlowListener?
-    ): Boolean {
-        BillingService.billingFlowListener = billingFlowListener
-        val skuDetails = skuDetailsMap[sku]?.value ?: return false
-        val params = BillingFlowParams.newBuilder().setSkuDetails(skuDetails).build()
-        val result = billingClient?.launchBillingFlow(activity, params) ?: return false
-        return result.isOk()
     }
 
     fun unsubscribe(activity: Activity, sku: String) {
@@ -248,86 +232,36 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
                     + "&sku=" + sku)
             intent.data = Uri.parse(subscriptionUrl)
             activity.startActivity(intent)
+            activity.finish()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timer("$TAG: Unsubscribing failed.")
         }
     }
 
-    override fun onPurchasesUpdated(billingResult: BillingResult, purchases: List<Purchase>?) {
-        if (billingResult.isOk() && purchases != null) {
-            processPurchases(purchases, true)
-        } else {
-            val isUserCancelled =
-                billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED
-            handler.post {
-                billingFlowListener?.onPurchaseError(isUserCancelled)
-                billingFlowListener = null
+
+    private fun productOwned(purchaseInfo: DataWrappers.PurchaseInfo, isRestore: Boolean) {
+        handler.post {
+            if (isRestore) {
+                purchaseServiceListener?.onProductRestored(purchaseInfo)
+            } else {
+                purchaseServiceListener?.onProductPurchased(purchaseInfo)
             }
         }
     }
 
-    private fun processPurchases(purchases: List<Purchase>, isFromBillingFlow: Boolean) {
-        backgroundExecutor.execute {
-            val purchasedSkus = mutableSetOf<String>()
-
-            purchases.forEach { purchase ->
-                if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
-                    return@forEach
-                }
-                if (!isSignatureValid(purchase)) {
-                    log("Invalid signature on purchase. Check to make sure your public key is correct.")
-                    return@forEach
-                }
-
-                when {
-                    purchase.isConsumable() -> {
-                        val result = consumePurchaseSync(purchase)
-                        if (!result.isOk()) return@forEach
-                    }
-                    !purchase.isAcknowledged -> {
-                        val result = acknowledgePurchaseSync(purchase)
-                        if (!result.isOk()) return@forEach
-                    }
-                }
-
-                purchasedSkus.addAll(purchase.skus)
-            }
-
-            handler.post {
-                if (isFromBillingFlow) {
-                    billingFlowListener?.onPurchased(purchasedSkus)
-                    billingFlowListener = null
-                } else {
-                    billingRestoredListener?.onPurchaseRestored(purchasedSkus)
-                }
+    private fun subscriptionOwned(purchaseInfo: DataWrappers.PurchaseInfo, isRestore: Boolean) {
+        handler.post {
+            if (isRestore) {
+                subscriptionServiceListener?.onSubscriptionRestored(purchaseInfo)
+            } else {
+                subscriptionServiceListener?.onSubscriptionPurchased(purchaseInfo)
             }
         }
     }
 
-    private fun Purchase.isConsumable(): Boolean {
-        val hasConsumableSku = skus.any { consumableSkus.contains(it) }
-        val hasNonConsumableSku =
-            skus.any { nonConsumableSkus.contains(it) || subscriptionSkus.contains(it) }
-        return hasConsumableSku && !hasNonConsumableSku
-    }
-
-    private fun isSignatureValid(purchase: Purchase): Boolean {
-        val key = publicKey ?: return true
-        return Security.verifyPurchase(purchase.originalJson, purchase.signature, key)
-    }
-
-    @WorkerThread
-    private fun consumePurchaseSync(purchase: Purchase): BillingResult {
-        val blockingQueue = ArrayBlockingQueue<BillingResult>(1)
-        val params = ConsumeParams.newBuilder()
-            .setPurchaseToken(purchase.purchaseToken)
-            .build()
-        billingClient?.consumeAsync(params) { billingResult: BillingResult, _: String ->
-            blockingQueue.add(billingResult)
-        }
-        return blockingQueue.take()
-    }
-
+    /**
+     * If the state is PURCHASED, acknowledge the purchase if it hasn't been acknowledged yet.
+     */
     @WorkerThread
     private fun acknowledgePurchaseSync(purchase: Purchase): BillingResult {
         val blockingQueue = ArrayBlockingQueue<BillingResult>(1)
@@ -340,43 +274,7 @@ object BillingService : PurchasesUpdatedListener, BillingClientStateListener,
         return blockingQueue.take()
     }
 
-    private fun log(message: String) {
-        if (enableDebug) {
-            Log.d(TAG, message)
-        }
-    }
+    fun getProductDetails() = productDetailsMap
 
-    private fun BillingResult.isOk(): Boolean {
-        return this.responseCode == BillingClient.BillingResponseCode.OK
-    }
-
-    fun getSkuTitle(sku: String): LiveData<String> {
-        val skuDetailsLiveData = skuDetailsMap[sku]!!
-        return Transformations.map(skuDetailsLiveData) { obj: SkuDetails -> obj.title }
-    }
-
-    fun getSkuPrice(sku: String?): LiveData<String> {
-        val skuDetailsLiveData = skuDetailsMap[sku]!!
-        return Transformations.map(skuDetailsLiveData) { obj: SkuDetails -> obj.price }
-    }
-
-    fun getSkuDescription(sku: String?): LiveData<String> {
-        val skuDetailsLiveData = skuDetailsMap[sku]!!
-        return Transformations.map(skuDetailsLiveData) { obj: SkuDetails -> obj.description }
-    }
-
-    fun getSkuDetailsMap() = skuDetailsMap
-
-    interface BillingFlowListener {
-        @MainThread
-        fun onPurchased(skus: Set<String>)
-
-        @MainThread
-        fun onPurchaseError(isUserCancelled: Boolean)
-    }
-
-    interface BillingRestoredListener {
-        @MainThread
-        fun onPurchaseRestored(skus: Set<String>)
-    }
+    fun getProductDetail(productId: String) = productDetailsMap[productId]
 }

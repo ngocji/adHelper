@@ -9,7 +9,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.OnLifecycleEvent
 import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -131,7 +130,7 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
 
     // endregion
     private fun sendEvent(action: String) {
-        LocalBroadcastManager.getInstance(application).sendBroadcast(Intent(action))
+        application.sendBroadcast(Intent(action))
     }
 
     fun setValidShowAds(action: (Activity?) -> Boolean) {
