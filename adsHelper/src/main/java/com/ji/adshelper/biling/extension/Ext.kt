@@ -16,21 +16,31 @@ fun Purchase.getPurchaseInfo(): DataWrappers.PurchaseInfo {
         purchaseTime,
         purchaseToken,
         signature,
-        products.firstOrNull() ?: "",
+        products.find { it.isNotEmpty() } ?: "",
         accountIdentifiers
     )
 }
 
 fun ProductDetails.toMapSUBS() = this.run {
+    val pricing = findPricingSubs(subscriptionOfferDetails)
     DataWrappers.ProductDetails(
         title = title,
         description = description,
-        priceCurrencyCode = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceCurrencyCode,
-        price = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice,
-        priceAmount = subscriptionOfferDetails?.firstOrNull()?.pricingPhases?.pricingPhaseList?.firstOrNull()?.priceAmountMicros?.div(
+        priceCurrencyCode = pricing?.priceCurrencyCode,
+        price = pricing?.formattedPrice,
+        priceAmount = pricing?.priceAmountMicros?.div(
             1000000.0
         )
     )
+}
+
+fun findPricingSubs(subscriptionOfferDetails: List<ProductDetails.SubscriptionOfferDetails>?): ProductDetails.PricingPhase? {
+    subscriptionOfferDetails?.forEach { product ->
+        val item = product.pricingPhases.pricingPhaseList.find { it.priceAmountMicros > 0 }
+        if (item != null) return item
+    }
+
+    return null
 }
 
 fun ProductDetails.toMap() = this.run {
