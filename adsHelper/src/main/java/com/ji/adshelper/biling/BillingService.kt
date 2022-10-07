@@ -175,12 +175,18 @@ object BillingService {
 
     fun launchBillingFlow(activity: Activity, productId: String): Boolean {
         val productDetails = productDetailsMap[productId] ?: return false
-        val offerToken = productDetails.subscriptionOfferDetails?.get(0)?.offerToken ?: ""
+        val offerToken =
+            productDetails.subscriptionOfferDetails?.find { it.offerToken.isNotEmpty() }?.offerToken
         val productDetailsParamsList =
             listOf(
                 BillingFlowParams.ProductDetailsParams.newBuilder()
-                    .setProductDetails(productDetails)
-                    .setOfferToken(offerToken)
+                    .apply {
+                        if (offerToken != null) {
+                            setOfferToken(offerToken)
+                        }
+
+                        setProductDetails(productDetails)
+                    }
                     .build()
             )
         val billingFlowParams =
