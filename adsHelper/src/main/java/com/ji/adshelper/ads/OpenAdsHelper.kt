@@ -5,9 +5,8 @@ import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
 import android.content.Intent
 import android.os.Bundle
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleObserver
-import androidx.lifecycle.OnLifecycleEvent
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
@@ -17,7 +16,7 @@ import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
 
 class OpenAdsHelper(private val application: Application) : ActivityLifecycleCallbacks,
-    LifecycleObserver {
+    DefaultLifecycleObserver {
     private var appOpenAd: AppOpenAd? = null
     private var isLoadingAd = false
     private var isShowingAd = false
@@ -25,7 +24,7 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     private var validShowAds: ((Activity?) -> Boolean)? = null
 
     val isAdAvailable: Boolean get() = appOpenAd != null
-    var pendingShowAds = false
+    var pendingShowAds = true // pending first from splash
 
     fun fetchAd(onAdListener: OnAdListener? = null) {
         // Fetch a new ad if we are not fetching them and there is no loaded ad available.
@@ -116,8 +115,8 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     /**
      * LifecycleObserver methods
      */
-    @OnLifecycleEvent(Lifecycle.Event.ON_START)
-    fun onStart() {
+
+    override fun onStart(owner: LifecycleOwner) {
         // automatically show an app open ad when the application starts or reopens from background
         if (pendingShowAds) {
             pendingShowAds = false

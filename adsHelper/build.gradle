@@ -32,17 +32,15 @@ android {
 }
 
 dependencies {
-    api 'com.google.android.gms:play-services-ads:21.2.0'
-    api 'com.android.billingclient:billing:5.0.0'
+    api 'com.google.android.gms:play-services-ads:21.5.0'
+    api 'com.android.billingclient:billing:5.1.0'
 
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'com.google.code.gson:gson:2.9.0'
+    implementation 'com.google.code.gson:gson:2.10'
 
-    def lifecycle_version = "2.2.0"
-    implementation "androidx.lifecycle:lifecycle-extensions:$lifecycle_version"
-    implementation "androidx.lifecycle:lifecycle-runtime:$lifecycle_version"
-    annotationProcessor "androidx.lifecycle:lifecycle-compiler:$lifecycle_version"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.5.1"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.6.0"
+    implementation 'androidx.lifecycle:lifecycle-process:2.5.1'
 }
 repositories {
     mavenCentral()
