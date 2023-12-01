@@ -19,7 +19,7 @@ object AdsSDK {
             AdsSDK.nativeId = "ca-app-pub-3940256099942544/2247696110"
             AdsSDK.interstitialId = "ca-app-pub-3940256099942544/1033173712"
             AdsSDK.rewardedId = "ca-app-pub-3940256099942544/5224354917"
-            AdsSDK.openAdId = "ca-app-pub-3940256099942544/1033173712"
+            AdsSDK.openAdId = "ca-app-pub-3940256099942544/9257395921"
         } else {
             AdsSDK.bannerId = bannerId
             AdsSDK.nativeId = nativeId
