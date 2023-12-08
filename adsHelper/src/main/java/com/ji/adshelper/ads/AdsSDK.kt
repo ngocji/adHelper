@@ -1,7 +1,7 @@
 package com.ji.adshelper.ads
 
 import android.Manifest
-import android.content.Context
+import android.app.Application
 import androidx.annotation.RequiresPermission
 import com.google.android.gms.ads.MobileAds
 
@@ -13,7 +13,15 @@ object AdsSDK {
     var openAdId: String = ""
 
     @RequiresPermission(Manifest.permission.INTERNET)
-    fun init(context: Context, bannerId: String, nativeId: String, interstitialId: String, rewardedId: String, openAdId: String, isDebug: Boolean) {
+    fun init(
+        application: Application,
+        bannerId: String,
+        nativeId: String,
+        interstitialId: String,
+        rewardedId: String,
+        openAdId: String,
+        isDebug: Boolean
+    ) {
         if (isDebug) {
             AdsSDK.bannerId = "ca-app-pub-3940256099942544/6300978111"
             AdsSDK.nativeId = "ca-app-pub-3940256099942544/2247696110"
@@ -28,6 +36,9 @@ object AdsSDK {
             AdsSDK.openAdId = openAdId
         }
 
-        MobileAds.initialize(context)
+        MobileAds.initialize(application)
+        if (AdsSDK.openAdId.isNotBlank()) {
+            OpenAdsHelper.init(application)
+        }
     }
 }
