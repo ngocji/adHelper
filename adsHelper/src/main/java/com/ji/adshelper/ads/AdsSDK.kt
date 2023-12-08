@@ -21,7 +21,8 @@ object AdsSDK {
         interstitialId: String,
         rewardedId: String,
         openAdId: String,
-        isDebug: Boolean
+        isDebug: Boolean,
+        onSuccess: () -> Unit
     ) {
         if (isDebug) {
             AdsSDK.bannerId = "ca-app-pub-3940256099942544/6300978111"
@@ -37,11 +38,13 @@ object AdsSDK {
             AdsSDK.openAdId = openAdId
         }
 
-       ConsentInfo.init(application) {
-           MobileAds.initialize(application)
-           if (AdsSDK.openAdId.isNotBlank()) {
-               OpenAdsHelper.init(application)
-           }
-       }
+        ConsentInfo.init(application) {
+            MobileAds.initialize(application)
+            if (AdsSDK.openAdId.isNotBlank()) {
+                OpenAdsHelper.init(application)
+            }
+
+            onSuccess()
+        }
     }
 }
