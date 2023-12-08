@@ -7,16 +7,14 @@ import com.ji.adshelper.consent.ConsentInfo
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
-        ConsentInfo.init(this) {
-            AdsSDK.init(
-                this,
-                "",
-                "",
-                "",
-                "",
-                "",
-                BuildConfig.DEBUG
-            )
-        }
+        AdsSDK.init(
+            this,
+            "",
+            "",
+            "",
+            "",
+            "",
+            BuildConfig.DEBUG
+        )
     }
 }

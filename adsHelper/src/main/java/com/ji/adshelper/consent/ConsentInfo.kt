@@ -30,8 +30,8 @@ object ConsentInfo {
         testDeviceHashedId: String? = null,
         testFromEEARegion: Boolean = true,
         showIfRequire: Boolean = true,
+        onFailed: () -> Unit = {},
         onLoadAd: () -> Unit,
-        onFailed: () -> Unit = {}
     ) {
         val debugSettings = ConsentDebugSettings.Builder(activity)
             .setDebugGeography(

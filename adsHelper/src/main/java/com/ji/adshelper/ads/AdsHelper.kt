@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import com.google.android.gms.ads.*
@@ -11,6 +12,7 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.ji.adshelper.consent.ConsentInfo
 import com.ji.adshelper.view.NativeTemplateStyle
 import com.ji.adshelper.view.TemplateView
 import java.util.*
@@ -23,6 +25,11 @@ object AdsHelper {
         templateView: TemplateView,
         onAdLoadListener: AdLoadListener? = null
     ) {
+        if (!ConsentInfo.isAcceptedConsent()) {
+            containerView.isVisible = false
+            return
+        }
+
         val adLoader = AdLoader.Builder(containerView.context, AdsSDK.nativeId)
             .forNativeAd { nativeAd ->
                 val styles = NativeTemplateStyle.Builder().build()
@@ -48,6 +55,11 @@ object AdsHelper {
 
     @JvmStatic
     fun loadBanner(viewGroup: ViewGroup, adSize: AdSize, onAdLoadListener: AdLoadListener? = null) {
+        if (!ConsentInfo.isAcceptedConsent()) {
+            viewGroup.isVisible = false
+            return
+        }
+
         val adView = AdView(viewGroup.context)
         adView.adUnitId = AdsSDK.bannerId
         adView.setAdSize(adSize)
@@ -77,6 +89,10 @@ object AdsHelper {
 
     @JvmStatic
     fun <T> loadInterstitialAd(target: T, onAdLoadListener: AdLoadListener? = null) {
+        if (!ConsentInfo.isAcceptedConsent()) {
+            return
+        }
+
         val context = getContext(target) ?: return
 
         InterstitialAd.load(context,
@@ -173,6 +189,10 @@ object AdsHelper {
 
     @JvmStatic
     fun <T> loadRewardAd(target: T, onAdLoadListener: AdLoadListener? = null) {
+        if (!ConsentInfo.isAcceptedConsent()) {
+            return
+        }
+
         val context = getContext(target) ?: return
         RewardedAd.load(
             context,

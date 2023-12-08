@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Application
 import androidx.annotation.RequiresPermission
 import com.google.android.gms.ads.MobileAds
+import com.ji.adshelper.consent.ConsentInfo
 
 object AdsSDK {
     var bannerId: String = ""
@@ -36,9 +37,11 @@ object AdsSDK {
             AdsSDK.openAdId = openAdId
         }
 
-        MobileAds.initialize(application)
-        if (AdsSDK.openAdId.isNotBlank()) {
-            OpenAdsHelper.init(application)
-        }
+       ConsentInfo.init(application) {
+           MobileAds.initialize(application)
+           if (AdsSDK.openAdId.isNotBlank()) {
+               OpenAdsHelper.init(application)
+           }
+       }
     }
 }

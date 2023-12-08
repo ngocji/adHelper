@@ -14,7 +14,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        ConsentInfo.requestIfNeed(this, "D7FD652C964C06B28812ACFA171E56DC",/*"4D1C1C161AC03F5666BB6A283C42BD67"*/) {
+        ConsentInfo.requestIfNeed(this, testDeviceHashedId = "D7FD652C964C06B28812ACFA171E56DC", testFromEEARegion = false) {
             AdsHelper.loadBanner(findViewById(R.id.bannerGroup), BANNER)
             AdsHelper.loadNative(findViewById(R.id.adsGroup), findViewById(R.id.title_template))
 //
