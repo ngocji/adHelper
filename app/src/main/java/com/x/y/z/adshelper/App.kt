@@ -14,7 +14,7 @@ class App : Application() {
             "",
             "",
             "",
-            BuildConfig.DEBUG
+            BuildConfig.DEBUG, {}
         )
     }
 }

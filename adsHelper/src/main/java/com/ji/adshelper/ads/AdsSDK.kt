@@ -12,8 +12,10 @@ object AdsSDK {
     var interstitialId: String = ""
     var rewardedId: String = ""
     var openAdId: String = ""
+    private var isInstalled = false
 
     @RequiresPermission(Manifest.permission.INTERNET)
+    @JvmStatic
     fun init(
         application: Application,
         bannerId: String,
@@ -39,6 +41,8 @@ object AdsSDK {
         }
 
         ConsentInfo.init(application) {
+            if (isInstalled) return@init
+            isInstalled = true
             MobileAds.initialize(application)
             if (AdsSDK.openAdId.isNotBlank()) {
                 OpenAdsHelper.init(application)

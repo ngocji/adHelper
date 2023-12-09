@@ -10,21 +10,25 @@ import com.google.android.ump.UserMessagingPlatform
 
 object ConsentInfo {
     private lateinit var consentInformation: ConsentInformation
-    private var installSdk: (() -> Unit)? = null
+    private var installSdk: Runnable? = null
 
     // calling in application
-    fun init(context: Context, installSdk: () -> Unit) {
+    @JvmStatic
+    fun init(context: Context, installSdk: Runnable) {
         consentInformation = UserMessagingPlatform.getConsentInformation(context)
         if (consentInformation.canRequestAds()) {
-            installSdk()
+            installSdk.run()
         } else {
             this.installSdk = installSdk
         }
     }
 
+
+    @JvmStatic
     fun isAcceptedConsent() =
         this::consentInformation.isInitialized && consentInformation.canRequestAds()
 
+    @JvmStatic
     fun requestIfNeed(
         activity: Activity,
         testDeviceHashedId: String? = null,
@@ -33,53 +37,56 @@ object ConsentInfo {
         onFailed: () -> Unit = {},
         onLoadAd: () -> Unit,
     ) {
-        val debugSettings = ConsentDebugSettings.Builder(activity)
-            .setDebugGeography(
-               if (testFromEEARegion) {
-                   ConsentDebugSettings
-                       .DebugGeography
-                       .DEBUG_GEOGRAPHY_EEA
-               } else {
-                   ConsentDebugSettings
-                       .DebugGeography
-                       .DEBUG_GEOGRAPHY_NOT_EEA
-               }
-            )
-            .addTestDeviceHashedId(testDeviceHashedId.orEmpty())
-            .build()
+        if (isAcceptedConsent()) {
+            initMobileSdkAccepted(onLoadAd = onLoadAd)
+        } else {
+            val debugSettings = ConsentDebugSettings.Builder(activity)
+                .setDebugGeography(
+                    if (testFromEEARegion) {
+                        ConsentDebugSettings
+                            .DebugGeography
+                            .DEBUG_GEOGRAPHY_EEA
+                    } else {
+                        ConsentDebugSettings
+                            .DebugGeography
+                            .DEBUG_GEOGRAPHY_NOT_EEA
+                    }
+                )
+                .addTestDeviceHashedId(testDeviceHashedId.orEmpty())
+                .build()
 
-        val params = ConsentRequestParameters.Builder()
-            .setTagForUnderAgeOfConsent(false)
-            .apply {
-                if (!testDeviceHashedId.isNullOrBlank()) {
-                    setConsentDebugSettings(debugSettings)
+            val params = ConsentRequestParameters.Builder()
+                .setTagForUnderAgeOfConsent(false)
+                .apply {
+                    if (!testDeviceHashedId.isNullOrBlank()) {
+                        setConsentDebugSettings(debugSettings)
+                    }
                 }
-            }
-            .build()
+                .build()
 
-        consentInformation.requestConsentInfoUpdate(
-            activity,
-            params,
-            {
-                if (consentInformation.isConsentFormAvailable) {
-                    if (showIfRequire) {
-                        showConsentFormIfRequire(activity) {
-                            initMobileSdkAccepted(onLoadAd)
+            consentInformation.requestConsentInfoUpdate(
+                activity,
+                params,
+                {
+                    if (consentInformation.isConsentFormAvailable) {
+                        if (showIfRequire) {
+                            showConsentFormIfRequire(activity) {
+                                initMobileSdkAccepted(onLoadAd)
+                            }
+                        } else {
+                            onFailed()
                         }
                     } else {
-                        onFailed()
+                        Log.e("Ads", "2")
+                        initMobileSdkAccepted(onLoadAd)
                     }
-                } else {
-                    initMobileSdkAccepted(onLoadAd)
+                },
+                { error ->
+                    Log.e("Ads", "Error request consentInfo: ${error.message}")
+                    onFailed()
                 }
-            },
-            { error ->
-                Log.e("Ads", "Error request consentInfo: ${error.message}")
-                onFailed()
-            }
-        )
-
-        initMobileSdkAccepted(onLoadAd = onLoadAd)
+            )
+        }
     }
 
     private fun showConsentFormIfRequire(activity: Activity, onDismissListener: () -> Unit) {
@@ -92,8 +99,13 @@ object ConsentInfo {
 
     private fun initMobileSdkAccepted(onLoadAd: (() -> Unit)? = null) {
         if (consentInformation.canRequestAds()) {
-            installSdk?.invoke()
+            startInstallSDK()
             onLoadAd?.invoke()
         }
+    }
+
+    private fun startInstallSDK() {
+        installSdk?.run()
+        installSdk = null
     }
 }
