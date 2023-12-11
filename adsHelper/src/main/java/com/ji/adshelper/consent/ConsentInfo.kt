@@ -11,6 +11,7 @@ import com.google.android.ump.UserMessagingPlatform
 object ConsentInfo {
     private lateinit var consentInformation: ConsentInformation
     private var installSdk: Runnable? = null
+    private var onConsentListener: OnConsentListener? = null
 
     // calling in application
     @JvmStatic
@@ -29,17 +30,24 @@ object ConsentInfo {
         this::consentInformation.isInitialized && consentInformation.canRequestAds()
 
     @JvmStatic
+    fun destroyRequest() {
+        onConsentListener = null
+    }
+
+    @JvmStatic
     fun requestIfNeed(
         activity: Activity,
         testDeviceHashedId: String? = null,
         testFromEEARegion: Boolean = true,
         showIfRequire: Boolean = true,
-        onFailed: () -> Unit = {},
-        onLoadAd: () -> Unit,
+        onConsentListener: OnConsentListener?
     ) {
         if (isAcceptedConsent()) {
-            initMobileSdkAccepted(onLoadAd = onLoadAd)
+            initMobileSdkAccepted(onLoadAd = {
+                onConsentListener?.onLoadAd()
+            })
         } else {
+            this.onConsentListener = onConsentListener
             val debugSettings = ConsentDebugSettings.Builder(activity)
                 .setDebugGeography(
                     if (testFromEEARegion) {
@@ -68,22 +76,27 @@ object ConsentInfo {
                 activity,
                 params,
                 {
+                    if (activity.isDestroyed) return@requestConsentInfoUpdate
+
                     if (consentInformation.isConsentFormAvailable) {
                         if (showIfRequire) {
                             showConsentFormIfRequire(activity) {
-                                initMobileSdkAccepted(onLoadAd)
+                                initMobileSdkAccepted{
+                                    this.onConsentListener?.onLoadAd()
+                                }
                             }
                         } else {
-                            onFailed()
+                            this.onConsentListener?.onFailed()
                         }
                     } else {
-                        Log.e("Ads", "2")
-                        initMobileSdkAccepted(onLoadAd)
+                        initMobileSdkAccepted {
+                            this.onConsentListener?.onLoadAd()
+                        }
                     }
                 },
                 { error ->
                     Log.e("Ads", "Error request consentInfo: ${error.message}")
-                    onFailed()
+                    this.onConsentListener?.onFailed()
                 }
             )
         }

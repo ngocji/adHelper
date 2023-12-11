@@ -40,14 +40,15 @@ object AdsSDK {
             AdsSDK.openAdId = openAdId
         }
 
+
+        if (AdsSDK.openAdId.isNotBlank()) {
+            OpenAdsHelper.init(application)
+        }
+
         ConsentInfo.init(application) {
             if (isInstalled) return@init
             isInstalled = true
             MobileAds.initialize(application)
-            if (AdsSDK.openAdId.isNotBlank()) {
-                OpenAdsHelper.init(application)
-            }
-
             onSuccess()
         }
     }
