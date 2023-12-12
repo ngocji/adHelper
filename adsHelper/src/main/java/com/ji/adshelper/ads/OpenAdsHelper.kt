@@ -1,5 +1,6 @@
 package com.ji.adshelper.ads
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
@@ -139,6 +140,7 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     companion object {
         const val ACTION_CLOSE = "openAdsHelper_ActionClose"
         const val ACTION_ERROR = "openAdsHelper_ActionError"
+        @SuppressLint("StaticFieldLeak")
         private var instance: OpenAdsHelper? = null
 
         @JvmStatic

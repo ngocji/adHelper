@@ -36,7 +36,10 @@ object AdsSDK {
             AdsSDK.openAdId = openAdId
         }
 
+        if (openAdId.isNotBlank()) {
+            OpenAdsHelper.init(app)
+        }
+
         MobileAds.initialize(app)
-        OpenAdsHelper.init(app)
     }
 }
