@@ -9,6 +9,7 @@ import android.os.Looper
 import androidx.annotation.WorkerThread
 import com.android.billingclient.api.*
 import com.ji.adshelper.biling.entities.DataWrappers
+import com.ji.adshelper.biling.entities.ProductType
 import com.ji.adshelper.biling.extension.*
 import com.ji.adshelper.biling.listener.BillingServiceListener
 import java.util.*
@@ -18,9 +19,11 @@ import java.util.concurrent.Executors
 object BillingService {
     private const val TAG = "BillingService"
     private var billingClient: BillingClient? = null
-    private var nonConsumableSkus: List<String> = emptyList()
-    private var consumableSkus: List<String> = emptyList()
-    private var subscriptionSkus: List<String> = emptyList()
+
+    var nonConsumableSkus: List<String> = emptyList()
+    var consumableSkus: List<String> = emptyList()
+    var subscriptionSkus: List<String> = emptyList()
+
     private var decodedKey: String? = null
     private val productDetailsMap = mutableMapOf<String, ProductDetails?>()
     private val handler = Handler(Looper.getMainLooper())
@@ -48,6 +51,7 @@ object BillingService {
                         querySkuDetailsAsync()
                         refreshPurchasesAsync()
                     }
+
                     else -> {}
                 }
             }
@@ -71,19 +75,13 @@ object BillingService {
 
                     productDetailsMap.mapNotNull { entry ->
                         entry.value?.let {
-                            when (it.productType) {
-                                BillingClient.ProductType.SUBS -> {
-                                    entry.key to it.toMapSUBS()
-                                }
-                                else -> {
-                                    entry.key to it.toMap()
-                                }
-                            }
+                            entry.key to it.toMap()
                         }
                     }.let {
                         updatePrices(it.toMap())
                     }
                 }
+
                 else -> {}
             }
         }
@@ -115,11 +113,11 @@ object BillingService {
 
     @JvmStatic
     fun queryPurchasedInfo(
-        @BillingClient.ProductType type: String,
+        type: ProductType,
         id: String,
         action: (DataWrappers.PurchaseInfo) -> Unit
     ) {
-        billingClient?.queryPurchasesAsync(type.getQueryPurchasesParams()) { result, purchases ->
+        billingClient?.queryPurchasesAsync(type.productType.getQueryPurchasesParams()) { result, purchases ->
             if (result.isOk()) {
                 purchases.find { it.products.contains(id) }?.also {
                     action.invoke(it.getPurchaseInfo())
@@ -212,16 +210,18 @@ object BillingService {
                     BillingClient.ProductType.INAPP -> {
                         productOwned(purchase.getPurchaseInfo(), isRestore)
                     }
+
                     BillingClient.ProductType.SUBS -> {
                         subscriptionOwned(purchase.getPurchaseInfo(), isRestore)
                     }
                 }
 
                 when {
-                    purchase.isConsumable() -> {
+                    purchase.products.isConsumable() -> {
                         val result = consumePurchaseSync(purchase)
                         if (!result.isOk()) return@forEach
                     }
+
                     !purchase.isAcknowledged -> {
                         val result = acknowledgePurchaseSync(purchase)
                         if (!result.isOk()) return@forEach
@@ -262,13 +262,13 @@ object BillingService {
         }
     }
 
-    fun unsubscribe(activity: Activity, sku: String) {
+    fun unsubscribe(activity: Activity, productId: String) {
         try {
             val intent = Intent()
             intent.action = Intent.ACTION_VIEW
             val subscriptionUrl = ("http://play.google.com/store/account/subscriptions"
                     + "?package=" + activity.packageName
-                    + "&sku=" + sku)
+                    + "&sku=" + productId)
             intent.data = Uri.parse(subscriptionUrl)
             activity.startActivity(intent)
             activity.finish()
@@ -327,13 +327,6 @@ object BillingService {
             blockingQueue.add(billingResult)
         }
         return blockingQueue.take()
-    }
-
-    private fun Purchase.isConsumable(): Boolean {
-        val hasConsumableSku = products.any { consumableSkus.contains(it) }
-        val hasNonConsumableSku =
-            products.any { nonConsumableSkus.contains(it) || subscriptionSkus.contains(it) }
-        return hasConsumableSku && !hasNonConsumableSku
     }
 
     fun getProductDetails() = productDetailsMap
