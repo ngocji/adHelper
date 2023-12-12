@@ -7,12 +7,27 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.WorkerThread
-import com.android.billingclient.api.*
+import com.android.billingclient.api.AcknowledgePurchaseParams
+import com.android.billingclient.api.BillingClient
+import com.android.billingclient.api.BillingClientStateListener
+import com.android.billingclient.api.BillingFlowParams
+import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.ProductDetails
+import com.android.billingclient.api.ProductDetailsResponseListener
+import com.android.billingclient.api.Purchase
+import com.android.billingclient.api.PurchasesUpdatedListener
+import com.android.billingclient.api.QueryProductDetailsParams
 import com.ji.adshelper.biling.entities.DataWrappers
 import com.ji.adshelper.biling.entities.ProductType
-import com.ji.adshelper.biling.extension.*
+import com.ji.adshelper.biling.extension.getPurchaseInfo
+import com.ji.adshelper.biling.extension.getQueryPurchasesParams
+import com.ji.adshelper.biling.extension.isConsumable
+import com.ji.adshelper.biling.extension.isOk
+import com.ji.adshelper.biling.extension.isSignatureValid
+import com.ji.adshelper.biling.extension.toMap
 import com.ji.adshelper.biling.listener.BillingServiceListener
-import java.util.*
+import java.util.Timer
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
 
@@ -171,16 +186,28 @@ object BillingService {
         return productList
     }
 
-    fun launchBillingFlow(activity: Activity, productId: String): Boolean {
+    @JvmStatic
+    fun launchBillingFlow(
+        activity: Activity,
+        productId: String,
+    ): Boolean {
+        return launchBillingFlow(activity = activity, productId = productId, offerToken = null)
+    }
+
+    @JvmStatic
+    fun launchBillingFlow(
+        activity: Activity,
+        productId: String,
+        offerToken: String?
+    ): Boolean {
         val productDetails = productDetailsMap[productId] ?: return false
-        val offerToken =
-            productDetails.subscriptionOfferDetails?.find { it.offerToken.isNotEmpty() }?.offerToken
+        val optimizeOfferToken = offerToken ?: productDetails.subscriptionOfferDetails?.find { it.offerToken.isNotEmpty() }?.offerToken
         val productDetailsParamsList =
             listOf(
                 BillingFlowParams.ProductDetailsParams.newBuilder()
                     .apply {
-                        if (offerToken != null) {
-                            setOfferToken(offerToken)
+                        if (optimizeOfferToken != null) {
+                            setOfferToken(optimizeOfferToken)
                         }
 
                         setProductDetails(productDetails)

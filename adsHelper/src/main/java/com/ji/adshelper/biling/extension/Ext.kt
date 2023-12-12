@@ -10,6 +10,7 @@ import com.android.billingclient.api.QueryPurchasesParams
 import com.ji.adshelper.biling.BillingService
 import com.ji.adshelper.biling.Security
 import com.ji.adshelper.biling.entities.DataWrappers
+import com.ji.adshelper.biling.entities.ProductType
 
 fun Purchase.getPurchaseInfo(): DataWrappers.PurchaseInfo {
     return DataWrappers.PurchaseInfo(
@@ -59,7 +60,7 @@ private fun List<SubscriptionOfferDetails>.mapToOffer(): List<DataWrappers.Produ
 }
 
 fun ProductDetails.toMap() = this.run {
-    val type = DataWrappers.ProductType.safe(
+    val type = ProductType.safe(
         type = productType,
         isConsumer = listOf(productId).isConsumable()
     )
@@ -69,7 +70,7 @@ fun ProductDetails.toMap() = this.run {
     var offers: List<DataWrappers.ProductDetails.Offer>? = null
 
     when (type) {
-        DataWrappers.ProductType.SUBSCRIPTION -> {
+        ProductType.SUBSCRIPTION -> {
             findBasePricingSubs(subscriptionOfferDetails)?.also {
                 price = it.formattedPrice
                 priceAmount = it.priceAmountMicros.toPriceAmount()
