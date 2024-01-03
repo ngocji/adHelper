@@ -15,6 +15,7 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
+import com.ji.adshelper.consent.ConsentInfo
 
 class OpenAdsHelper(private val application: Application) : ActivityLifecycleCallbacks,
     DefaultLifecycleObserver {
@@ -29,6 +30,8 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
 
     fun fetchAd(onAdListener: OnAdListener? = null) {
         // Fetch a new ad if we are not fetching them and there is no loaded ad available.
+        if (!ConsentInfo.isAcceptedConsent()) return
+
         if (isAdAvailable) {
             onAdListener?.onAdLoaded()
             return

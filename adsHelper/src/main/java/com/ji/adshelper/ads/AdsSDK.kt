@@ -1,9 +1,10 @@
 package com.ji.adshelper.ads
 
 import android.Manifest
-import android.app.Application
+import android.content.Context
 import androidx.annotation.RequiresPermission
 import com.google.android.gms.ads.MobileAds
+import com.ji.adshelper.consent.ConsentInfo
 
 object AdsSDK {
     var bannerId: String = ""
@@ -11,16 +12,19 @@ object AdsSDK {
     var interstitialId: String = ""
     var rewardedId: String = ""
     var openAdId: String = ""
+    private var isInstalled = false
 
     @RequiresPermission(Manifest.permission.INTERNET)
+    @JvmStatic
     fun init(
-        app: Application,
+        application: Application,
         bannerId: String,
         nativeId: String,
         interstitialId: String,
         rewardedId: String,
         openAdId: String,
-        isDebug: Boolean
+        isDebug: Boolean,
+        onSuccess: () -> Unit
     ) {
         if (isDebug) {
             AdsSDK.bannerId = "ca-app-pub-3940256099942544/6300978111"
@@ -36,10 +40,17 @@ object AdsSDK {
             AdsSDK.openAdId = openAdId
         }
 
-        if (openAdId.isNotBlank()) {
-            OpenAdsHelper.init(app)
+
+        if (AdsSDK.openAdId.isNotBlank()) {
+            OpenAdsHelper.init(application)
         }
 
-        MobileAds.initialize(app)
+        ConsentInfo.init(application) {
+            if (!isInstalled) {
+                isInstalled = true
+                MobileAds.initialize(application)
+                onSuccess()
+            }
+        }
     }
 }
