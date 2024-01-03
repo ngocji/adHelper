@@ -1,7 +1,7 @@
 package com.ji.adshelper.ads
 
 import android.Manifest
-import android.content.Context
+import android.app.Application
 import androidx.annotation.RequiresPermission
 import com.google.android.gms.ads.MobileAds
 import com.ji.adshelper.consent.ConsentInfo
