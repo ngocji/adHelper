@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
-import android.content.Intent
 import android.os.Bundle
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -17,7 +16,9 @@ import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
 import com.ji.adshelper.consent.ConsentInfo
 
-class OpenAdsHelper(private val application: Application) : ActivityLifecycleCallbacks,
+class OpenAdsHelper(
+    private val application: Application,
+    private var targetVersion: Int = CURRENT_VERSION) : ActivityLifecycleCallbacks,
     DefaultLifecycleObserver {
     private var appOpenAd: AppOpenAd? = null
     private var isLoadingAd = false
@@ -25,12 +26,63 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
     private var currentActivity: Activity? = null
     private var validShowAds: ((Activity?) -> Boolean)? = null
 
-    val isAdAvailable: Boolean get() = appOpenAd != null
-    var pendingShowAds = true // pending first from splash
+    private val isAdAvailable: Boolean get() = appOpenAd != null
+    private var pendingShowAds = true // pending first from splash
+    private var onAdListener: OnAdListener? = null
 
+    fun setAdListener(callback: OnAdListener): OpenAdsHelper {
+        this.onAdListener = callback
+        return this
+    }
+
+    fun removeAdListener() {
+        this.onAdListener = null
+    }
+
+    fun fetch() {
+        // Fetch a new ad if we are not fetching them and there is no loaded ad available.
+        if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
+            onAdListener?.onAdLoadFailed(-1)
+            return
+        }
+
+        if (isAdAvailable) {
+            onAdListener?.onAdLoaded()
+            return
+        }
+
+        if (isLoadingAd) {
+            onAdListener?.onAdLoading()
+            return
+        }
+
+        isLoadingAd = true
+        val request = AdRequest.Builder().build()
+        AppOpenAd.load(
+            application,
+            AdsSDK.openAdId,
+            request,
+            object : AppOpenAdLoadCallback() {
+                override fun onAdLoaded(appOpenAd: AppOpenAd) {
+                    this@OpenAdsHelper.appOpenAd = appOpenAd
+                    isLoadingAd = false
+                    onAdListener?.onAdLoaded()
+                }
+
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    isLoadingAd = false
+                    onAdListener?.onAdLoadFailed(loadAdError.code)
+                }
+            })
+    }
+
+    @Deprecated("use @fetch")
     fun fetchAd(onAdListener: OnAdListener? = null) {
         // Fetch a new ad if we are not fetching them and there is no loaded ad available.
-        if (!ConsentInfo.isAcceptedConsent()) return
+        if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
+            onAdListener?.onAdLoadFailed(-1)
+            return
+        }
 
         if (isAdAvailable) {
             onAdListener?.onAdLoaded()
@@ -63,6 +115,36 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
             })
     }
 
+    fun show(callback: OnAdCloseListener? = null) {
+        // Show ad if an ad is available and no open ad is showing currently
+        if (!isShowingAd && isAdAvailable) {
+            val fullScreenContentCallback: FullScreenContentCallback =
+                object : FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() {
+                        appOpenAd = null
+                        isShowingAd = false
+                        callback?.onClose()
+                        fetch()
+                    }
+
+                    override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                        callback?.onClose()
+                        fetch()
+                    }
+
+                    override fun onAdShowedFullScreenContent() {
+                        isShowingAd = true
+                    }
+                }
+            appOpenAd?.fullScreenContentCallback = fullScreenContentCallback
+            appOpenAd?.show(currentActivity ?: return)
+        } else {
+            callback?.onClose()
+            fetch()
+        }
+    }
+
+    @Deprecated("use @show")
     fun showAdIfAvailable(adListener: OnAdListener? = null) {
         // Show ad if an ad is available and no open ad is showing currently
         if (!isShowingAd && isAdAvailable) {
@@ -72,12 +154,10 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
                         appOpenAd = null
                         isShowingAd = false
                         fetchAd()
-                        sendEvent(ACTION_CLOSE)
                         adListener?.onAdClosed()
                     }
 
                     override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                        sendEvent(ACTION_ERROR)
                         adListener?.onAdLoadFailed(adError.code)
                     }
 
@@ -90,7 +170,6 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
         } else {
             //fetch a new ad if needed
             fetchAd(adListener)
-            sendEvent(ACTION_ERROR)
         }
     }
 
@@ -128,29 +207,41 @@ class OpenAdsHelper(private val application: Application) : ActivityLifecycleCal
         }
 
         if (validShowAds != null && validShowAds?.invoke(currentActivity) == false) return
-        showAdIfAvailable()
+        if (targetVersion > 0) {
+            show()
+        } else {
+            showAdIfAvailable()
+        }
     }
 
     // endregion
-    private fun sendEvent(action: String) {
-        application.sendBroadcast(Intent(action))
-    }
-
     fun setValidShowAds(action: (Activity?) -> Boolean) {
         validShowAds = action
     }
 
     companion object {
-        const val ACTION_CLOSE = "openAdsHelper_ActionClose"
-        const val ACTION_ERROR = "openAdsHelper_ActionError"
         @SuppressLint("StaticFieldLeak")
         private var instance: OpenAdsHelper? = null
+
+        const val CURRENT_VERSION = 1
 
         @JvmStatic
         fun init(application: Application): OpenAdsHelper {
             return OpenAdsHelper(application).also {
                 instance = it
             }
+        }
+
+        @JvmStatic
+        fun init(application: Application, version: Int): OpenAdsHelper {
+            return OpenAdsHelper(application, targetVersion = version).also {
+                instance = it
+            }
+        }
+
+        @JvmStatic
+        fun setTargetVersion(version: Int) {
+            getInstance()?.targetVersion = version
         }
 
         @JvmStatic

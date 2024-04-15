@@ -12,6 +12,8 @@ object AdsSDK {
     var interstitialId: String = ""
     var rewardedId: String = ""
     var openAdId: String = ""
+    var needRequireConsent = true
+    var targetOpenAdVersion: Int = 0
     private var isInstalled = false
 
     @RequiresPermission(Manifest.permission.INTERNET)
@@ -42,7 +44,7 @@ object AdsSDK {
 
 
         if (AdsSDK.openAdId.isNotBlank()) {
-            OpenAdsHelper.init(application)
+            OpenAdsHelper.init(application, version = targetOpenAdVersion)
         }
 
         ConsentInfo.init(application) {
@@ -52,5 +54,17 @@ object AdsSDK {
                 onSuccess()
             }
         }
+    }
+
+    @JvmStatic
+    fun setTargetOpenAdVersion(version: Int): AdsSDK {
+        OpenAdsHelper.setTargetVersion(version)
+        return this
+    }
+
+    @JvmStatic
+    fun setRequireConsent(use: Boolean): AdsSDK {
+        needRequireConsent = use
+        return this
     }
 }

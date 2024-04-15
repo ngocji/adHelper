@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.NonNull
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
@@ -15,7 +16,6 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.ji.adshelper.consent.ConsentInfo
 import com.ji.adshelper.view.NativeTemplateStyle
 import com.ji.adshelper.view.TemplateView
-import java.util.*
 
 object AdsHelper {
     // region banner
@@ -25,7 +25,7 @@ object AdsHelper {
         templateView: TemplateView,
         onAdLoadListener: AdLoadListener? = null
     ) {
-        if (!ConsentInfo.isAcceptedConsent()) {
+        if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             containerView.isVisible = false
             return
         }
@@ -55,7 +55,7 @@ object AdsHelper {
 
     @JvmStatic
     fun loadBanner(viewGroup: ViewGroup, adSize: AdSize, onAdLoadListener: AdLoadListener? = null) {
-        if (!ConsentInfo.isAcceptedConsent()) {
+        if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             viewGroup.isVisible = false
             return
         }
@@ -89,7 +89,7 @@ object AdsHelper {
 
     @JvmStatic
     fun <T> loadInterstitialAd(target: T, onAdLoadListener: AdLoadListener? = null) {
-        if (!ConsentInfo.isAcceptedConsent()) {
+        if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             return
         }
 
@@ -119,6 +119,40 @@ object AdsHelper {
     }
 
     @JvmStatic
+    fun <T> showInterstitialAd(target: T, cacheNew: Boolean) {
+        showInterstitialAd(target = target, cacheNew = cacheNew, callback = null)
+    }
+
+    @JvmStatic
+    fun <T> showInterstitialAd(target: T, cacheNew: Boolean, callback: OnAdCloseListener?) {
+        val ins = interstitialAdSet[target.hashCode()]
+        if (ins == null) {
+            callback?.onClose()
+            if (cacheNew) loadInterstitialAd(target)
+            return
+        }
+
+        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                super.onAdFailedToShowFullScreenContent(adError)
+                callback?.onClose()
+                interstitialAdSet.remove(target.hashCode())
+                if (cacheNew) loadInterstitialAd(target)
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent()
+                callback?.onClose()
+                interstitialAdSet.remove(target.hashCode())
+                if (cacheNew) loadInterstitialAd(target)
+            }
+
+        }
+        ins.show(getActivity(target) ?: return)
+    }
+
+    @JvmStatic
+    @Deprecated("")
     fun <T> showInterstitialAd(target: T, cacheNew: Boolean, adListener: AdListener?) {
         val ins = interstitialAdSet[target.hashCode()]
         if (ins == null) {
@@ -134,10 +168,6 @@ object AdsHelper {
                 if (cacheNew) loadInterstitialAd(target)
             }
 
-            override fun onAdShowedFullScreenContent() {
-                super.onAdShowedFullScreenContent()
-            }
-
             override fun onAdDismissedFullScreenContent() {
                 super.onAdDismissedFullScreenContent()
                 adListener?.onAdRewarded()
@@ -145,14 +175,37 @@ object AdsHelper {
                 if (cacheNew) loadInterstitialAd(target)
             }
 
-            override fun onAdImpression() {
-                super.onAdImpression()
-            }
         }
         ins.show(getActivity(target) ?: return)
     }
 
     @JvmStatic
+    fun <T> showOneInterstitialAd(key: Context, target: T) {
+        showOneInterstitialAd(key = key, target = target, callback = null)
+    }
+
+    @JvmStatic
+    fun <T> showOneInterstitialAd(key: Context, target: T, callback: OnAdCloseListener?) {
+        val ins = interstitialAdSet[key.hashCode()] ?: return run { callback?.onClose() }
+        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                super.onAdFailedToShowFullScreenContent(adError)
+                callback?.onClose()
+                interstitialAdSet.remove(target.hashCode())
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent()
+                callback?.onClose()
+                interstitialAdSet.remove(target.hashCode())
+            }
+
+        }
+        ins.show(getActivity(target) ?: return)
+    }
+
+    @JvmStatic
+    @Deprecated("")
     fun <T> showOneInterstitialAd(key: Context, target: T, adListener: AdListener?) {
         val ins = interstitialAdSet[key.hashCode()] ?: return
         ins.fullScreenContentCallback = object : FullScreenContentCallback() {
@@ -162,19 +215,12 @@ object AdsHelper {
                 interstitialAdSet.remove(target.hashCode())
             }
 
-            override fun onAdShowedFullScreenContent() {
-                super.onAdShowedFullScreenContent()
-            }
-
             override fun onAdDismissedFullScreenContent() {
                 super.onAdDismissedFullScreenContent()
                 adListener?.onAdRewarded()
                 interstitialAdSet.remove(target.hashCode())
             }
 
-            override fun onAdImpression() {
-                super.onAdImpression()
-            }
         }
         ins.show(getActivity(target) ?: return)
     }
@@ -189,7 +235,7 @@ object AdsHelper {
 
     @JvmStatic
     fun <T> loadRewardAd(target: T, onAdLoadListener: AdLoadListener? = null) {
-        if (!ConsentInfo.isAcceptedConsent()) {
+        if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             return
         }
 
@@ -213,6 +259,22 @@ object AdsHelper {
     }
 
     @JvmStatic
+    fun <T> showRewardAd(target: T, cacheNew: Boolean, @NonNull callback: OnAdCloseListener) {
+        val rewardedAd = rewardAdSet[target.hashCode()]
+        if (rewardedAd == null) {
+            callback.onClose()
+            if (cacheNew) loadRewardAd(target)
+            return
+        }
+        rewardedAd.show(getActivity(target) ?: return, OnUserEarnedRewardListener {
+            callback.onClose()
+            rewardAdSet.remove(target.hashCode())
+            if (cacheNew) loadRewardAd(target)
+        })
+    }
+
+    @JvmStatic
+    @Deprecated("")
     fun <T> showRewardAd(target: T, cacheNew: Boolean, adListener: AdListener?) {
         val rewardedAd = rewardAdSet[target.hashCode()]
         if (rewardedAd == null) {
