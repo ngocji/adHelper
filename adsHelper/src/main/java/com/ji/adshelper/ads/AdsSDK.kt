@@ -13,8 +13,8 @@ object AdsSDK {
     var rewardedId: String = ""
     var openAdId: String = ""
     var needRequireConsent = true
-    var targetOpenAdVersion: Int = 0
-    private var isInstalled = false
+    var targetOpenAdVersion: Int = OpenAdsHelper.CURRENT_VERSION
+    var isInstalled = false
 
     @RequiresPermission(Manifest.permission.INTERNET)
     @JvmStatic

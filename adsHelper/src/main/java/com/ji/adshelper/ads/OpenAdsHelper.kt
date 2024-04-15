@@ -5,7 +5,8 @@ import android.app.Activity
 import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
 import android.os.Bundle
-import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.android.gms.ads.AdError
@@ -16,18 +17,20 @@ import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
 import com.ji.adshelper.consent.ConsentInfo
 
+@Suppress("MemberVisibilityCanBePrivate")
 class OpenAdsHelper(
     private val application: Application,
-    private var targetVersion: Int = CURRENT_VERSION) : ActivityLifecycleCallbacks,
-    DefaultLifecycleObserver {
+    private var targetVersion: Int = CURRENT_VERSION
+) : ActivityLifecycleCallbacks,
+    LifecycleEventObserver {
     private var appOpenAd: AppOpenAd? = null
     private var isLoadingAd = false
     private var isShowingAd = false
     private var currentActivity: Activity? = null
     private var validShowAds: ((Activity?) -> Boolean)? = null
 
-    private val isAdAvailable: Boolean get() = appOpenAd != null
-    private var pendingShowAds = true // pending first from splash
+    val isAdAvailable: Boolean get() = appOpenAd != null
+    var pendingShowAds = true // pending first from splash
     private var onAdListener: OnAdListener? = null
 
     fun setAdListener(callback: OnAdListener): OpenAdsHelper {
@@ -131,13 +134,10 @@ class OpenAdsHelper(
                         callback?.onClose()
                         fetch()
                     }
-
-                    override fun onAdShowedFullScreenContent() {
-                        isShowingAd = true
-                    }
                 }
             appOpenAd?.fullScreenContentCallback = fullScreenContentCallback
             appOpenAd?.show(currentActivity ?: return)
+            isShowingAd = true
         } else {
             callback?.onClose()
             fetch()
@@ -199,18 +199,20 @@ class OpenAdsHelper(
      * LifecycleObserver methods
      */
 
-    override fun onStart(owner: LifecycleOwner) {
-        // automatically show an app open ad when the application starts or reopens from background
-        if (pendingShowAds) {
-            pendingShowAds = false
-            return
-        }
+    override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+        if (event == Lifecycle.Event.ON_START) {
+            // automatically show an app open ad when the application starts or reopens from background
+            if (pendingShowAds) {
+                pendingShowAds = false
+                return
+            }
 
-        if (validShowAds != null && validShowAds?.invoke(currentActivity) == false) return
-        if (targetVersion > 0) {
-            show()
-        } else {
-            showAdIfAvailable()
+            if (validShowAds != null && validShowAds?.invoke(currentActivity) == false) return
+            if (targetVersion > 0) {
+                show()
+            } else {
+                showAdIfAvailable()
+            }
         }
     }
 
@@ -227,14 +229,14 @@ class OpenAdsHelper(
 
         @JvmStatic
         fun init(application: Application): OpenAdsHelper {
-            return OpenAdsHelper(application).also {
+            return instance ?: OpenAdsHelper(application).also {
                 instance = it
             }
         }
 
         @JvmStatic
         fun init(application: Application, version: Int): OpenAdsHelper {
-            return OpenAdsHelper(application, targetVersion = version).also {
+            return instance ?: OpenAdsHelper(application, targetVersion = version).also {
                 instance = it
             }
         }
