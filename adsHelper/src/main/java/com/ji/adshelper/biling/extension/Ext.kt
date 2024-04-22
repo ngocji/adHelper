@@ -59,6 +59,33 @@ private fun List<SubscriptionOfferDetails>.mapToOffer(): List<DataWrappers.Produ
         }
 }
 
+private fun findSubscriptionTrial(subscriptionOfferDetails: List<SubscriptionOfferDetails>?): Int {
+    subscriptionOfferDetails?.forEach { detail ->
+        detail.pricingPhases.pricingPhaseList.forEach { pricingPhase ->
+            if (pricingPhase.priceAmountMicros <= 0) {
+                return parseTrialPeriod(pricingPhase.billingPeriod)
+            }
+        }
+    }
+
+    return 0
+}
+
+private fun parseTrialPeriod(billingPeriod: String): Int {
+    if (billingPeriod.isBlank()) return 0
+    var day = 0
+    val period = billingPeriod.substring(1)
+    val type = period.substring(period.length - 1)
+    val count = period.substring(0, period.length - 1).toIntOrNull() ?: 0
+    when (type.uppercase()) {
+        "D" -> day = count
+        "W" -> day = count * 7
+        "M" -> day = count * 30
+        "Y" -> day = count * 365
+    }
+    return day
+}
+
 fun ProductDetails.toMap() = this.run {
     val type = ProductType.safe(
         type = productType,
@@ -68,9 +95,11 @@ fun ProductDetails.toMap() = this.run {
     var priceAmount: Double? = null
     var priceCurrencyCode: String? = null
     var offers: List<DataWrappers.ProductDetails.Offer>? = null
+    var trialPeriod = 0
 
     when (type) {
         ProductType.SUBSCRIPTION -> {
+            trialPeriod = findSubscriptionTrial(subscriptionOfferDetails)
             findBasePricingSubs(subscriptionOfferDetails)?.also {
                 price = it.formattedPrice
                 priceAmount = it.priceAmountMicros.toPriceAmount()
@@ -95,7 +124,8 @@ fun ProductDetails.toMap() = this.run {
         priceAmount = priceAmount,
         productId = productId,
         productType = type,
-        offers = offers
+        offers = offers,
+        trialPeriod = trialPeriod
     )
 }
 
