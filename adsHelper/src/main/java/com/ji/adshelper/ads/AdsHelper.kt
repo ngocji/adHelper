@@ -5,9 +5,11 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.NonNull
+import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import com.google.ads.mediation.admob.AdMobAdapter
 import com.google.android.gms.ads.*
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
@@ -16,6 +18,7 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.ji.adshelper.consent.ConsentInfo
 import com.ji.adshelper.view.NativeTemplateStyle
 import com.ji.adshelper.view.TemplateView
+
 
 object AdsHelper {
     // region banner
@@ -54,13 +57,48 @@ object AdsHelper {
     }
 
     @JvmStatic
+    fun loadBanner(
+        context: Context,
+        viewGroup: ViewGroup,
+        adSize: AdSize,
+        onAdLoadListener: AdLoadListener? = null
+    ) {
+        loadBanner(context, viewGroup, adSize, null, onAdLoadListener)
+    }
+
+    @JvmStatic
     fun loadBanner(viewGroup: ViewGroup, adSize: AdSize, onAdLoadListener: AdLoadListener? = null) {
+        loadBanner(viewGroup.context, viewGroup, adSize, onAdLoadListener)
+    }
+
+    @JvmStatic
+    fun loadBanner(
+        viewGroup: ViewGroup,
+        adSize: AdSize,
+        collapsibleType: CollapsibleType?,
+        onAdLoadListener: AdLoadListener? = null
+    ) {
+        loadBanner(viewGroup.context, viewGroup, adSize, collapsibleType, onAdLoadListener)
+    }
+
+    @JvmStatic
+    fun loadBanner(
+        context: Context,
+        viewGroup: ViewGroup,
+        adSize: AdSize,
+        collapsibleType: CollapsibleType?,
+        onAdLoadListener: AdLoadListener? = null
+    ) {
         if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             viewGroup.isVisible = false
             return
         }
 
-        val adView = AdView(viewGroup.context)
+        if (viewGroup.childCount > 0) {
+            viewGroup.removeAllViews()
+        }
+
+        val adView = AdView(context)
         adView.adUnitId = AdsSDK.bannerId
         adView.setAdSize(adSize)
         viewGroup.addView(adView)
@@ -75,7 +113,19 @@ object AdsHelper {
             }
         }
 
-        adView.loadAd(AdRequest.Builder().build())
+        val request = AdRequest.Builder()
+            .apply {
+                if (collapsibleType != null) {
+                    addNetworkExtrasBundle(
+                        AdMobAdapter::class.java, bundleOf(
+                            "collapsible" to collapsibleType.name.lowercase()
+                        )
+                    )
+                }
+            }
+            .build()
+
+        adView.loadAd(request)
     }
 
     // endregion

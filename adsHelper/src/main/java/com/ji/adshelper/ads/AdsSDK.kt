@@ -29,7 +29,7 @@ object AdsSDK {
         onSuccess: () -> Unit
     ) {
         if (isDebug) {
-            AdsSDK.bannerId = "ca-app-pub-3940256099942544/6300978111"
+            AdsSDK.bannerId = "ca-app-pub-3940256099942544/2014213617"
             AdsSDK.nativeId = "ca-app-pub-3940256099942544/2247696110"
             AdsSDK.interstitialId = "ca-app-pub-3940256099942544/1033173712"
             AdsSDK.rewardedId = "ca-app-pub-3940256099942544/5224354917"
