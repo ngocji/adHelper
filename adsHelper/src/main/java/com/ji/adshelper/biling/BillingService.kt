@@ -289,7 +289,7 @@ object BillingService {
 
                 val isSuccess =
                     purchases.any { it.purchaseState == Purchase.PurchaseState.PURCHASED }
-                onRestored?.invoke(isSuccess)
+                handler.post { onRestored?.invoke(isSuccess) }
                 processPurchases(purchases, true)
             }
         }

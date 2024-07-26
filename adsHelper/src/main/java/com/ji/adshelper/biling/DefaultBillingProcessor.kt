@@ -18,26 +18,28 @@ import com.ji.adshelper.biling.utils.BillingUtils
 import java.util.Calendar
 
 @Suppress("MemberVisibilityCanBePrivate")
-abstract class AbstractBillingProcessor : BillingServiceListener {
-    open lateinit var iapHelper: IapHelper
-    open var onRestoreListener: OnRestoreListener? = null
+object DefaultBillingProcessor : BillingServiceListener {
+    private lateinit var iapHelper: IapHelper
+    private var onRestoreListener: OnRestoreListener? = null
     val eventPurchaseSuccess = IPurchaseLiveEvent<DataWrappers.PurchaseInfo>()
 
-    abstract fun nonConsumableSkus(): List<String>
-    abstract fun consumableSkus(): List<String>
-    abstract fun subscriptionSkus(): List<String>
-    abstract fun decodedKey(): String?
-
-    fun init(app: Application) {
+    fun init(
+        app: Application,
+        nonConsumableSkus: List<String> = emptyList(),
+        consumableSkus: List<String> = emptyList(),
+        subscriptionSkus: List<String> = emptyList(),
+        enabledPendingPurchase: Boolean = true,
+        decodedKey: String?
+    ) {
         iapHelper = IapHelperImpl(app.applicationContext)
 
         BillingService.init(
             app,
-            nonConsumableSkus = nonConsumableSkus(),
-            consumableSkus = consumableSkus(),
-            subscriptionSkus = subscriptionSkus(),
-            decodedKey = decodedKey(),
-            pendingPurchasesParams = createPendingPurchasesParams()
+            nonConsumableSkus = nonConsumableSkus,
+            consumableSkus = consumableSkus,
+            subscriptionSkus = subscriptionSkus,
+            decodedKey = decodedKey,
+            pendingPurchasesParams = createPendingPurchasesParams(enabledPendingPurchase)
         )
 
         BillingService.setListener(this)
@@ -79,7 +81,7 @@ abstract class AbstractBillingProcessor : BillingServiceListener {
         }
     }
 
-    open fun openManager(context: Context) {
+    fun openManager(context: Context) {
         val sku: String = getPurchasedProductId()
         if (TextUtils.isEmpty(sku)) return
         try {
@@ -121,23 +123,27 @@ abstract class AbstractBillingProcessor : BillingServiceListener {
         }
     }
 
-    open fun createPendingPurchasesParams(): PendingPurchasesParams {
+    fun createPendingPurchasesParams(enabledPendingPurchase: Boolean): PendingPurchasesParams {
         return PendingPurchasesParams.newBuilder()
-            .enablePrepaidPlans()
-            .enableOneTimeProducts()
+            .apply {
+                if (enabledPendingPurchase) {
+                    enablePrepaidPlans()
+                    enableOneTimeProducts()
+                }
+            }
             .build()
     }
 
-    open fun savePrefIfNeed(purchaseInfo: DataWrappers.PurchaseInfo) {
+    fun savePrefIfNeed(purchaseInfo: DataWrappers.PurchaseInfo) {
         // save pref for non consume and subs
-        if (BillingService.nonConsumableSkus.any { it == purchaseInfo.sku } || BillingService.subscriptionSkus.any { it == purchaseInfo.sku }) {
-            iapHelper.onProductPurchased(purchaseInfo.sku)
+        if (BillingService.nonConsumableSkus.any { it == purchaseInfo.productId } || BillingService.subscriptionSkus.any { it == purchaseInfo.productId }) {
+            iapHelper.onProductPurchased(purchaseInfo.productId)
         }
     }
 
-    open fun getExpiredTime(info: DataWrappers.PurchaseInfo?): Long {
-        if (info == null || info.sku.isEmpty()) return 0
-        val productDetails = getProductDetails()[info.sku] ?: return 0
+    fun getExpiredTime(info: DataWrappers.PurchaseInfo?): Long {
+        if (info == null || info.productId.isEmpty()) return 0
+        val productDetails = getProductDetails()[info.productId] ?: return 0
 
         val purchaseTime = info.purchaseTime
         val calendar = Calendar.getInstance()
@@ -146,7 +152,7 @@ abstract class AbstractBillingProcessor : BillingServiceListener {
         return calendar.timeInMillis
     }
 
-    open fun getExpiredTimeFormatted(info: DataWrappers.PurchaseInfo?): String? {
+    fun getExpiredTimeFormatted(info: DataWrappers.PurchaseInfo?): String? {
         return getExpiredTime(info).takeIf { it > 0 }?.let { BillingUtils.formatPurchaseDate(it) }
     }
 
@@ -164,8 +170,9 @@ abstract class AbstractBillingProcessor : BillingServiceListener {
 
     override fun onProductRestored(purchaseInfo: DataWrappers.PurchaseInfo) {
         val revokedNonConsumePrdIds =
-            BillingService.nonConsumableSkus.filter { purchaseInfo.sku != it }
-        val revokedSubPrdIds = BillingService.subscriptionSkus.filter { purchaseInfo.sku != it }
+            BillingService.nonConsumableSkus.filter { purchaseInfo.productId != it }
+        val revokedSubPrdIds =
+            BillingService.subscriptionSkus.filter { purchaseInfo.productId != it }
 
         revokedNonConsumePrdIds.forEach { iapHelper.onProductRevoked(it) }
         revokedSubPrdIds.forEach { iapHelper.onProductRevoked(it) }

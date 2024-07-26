@@ -32,14 +32,14 @@ object BillingUtils {
     fun calculateDiscount(
         details1: DataWrappers.ProductDetails?,
         details2: DataWrappers.ProductDetails?
-    ): Float {
-        if (details1 == null || details2 == null) return 0f
+    ): Double {
+        if (details1 == null || details2 == null) return 0.0
         val price1 = details1.priceAmount ?: 0.0
         val price2 = details2.priceAmount ?: 0.0
-        return if (price2 != 0.0) ({
-            (price1 / price2) * 100f
-        }).toFloat() else {
-            0f
+        return if (price2 != 0.0) {
+            (price1 / price2) * 100
+        } else {
+            0.0
         }
     }
 
