@@ -11,21 +11,22 @@ import com.ji.adshelper.biling.BillingService
 import com.ji.adshelper.biling.Security
 import com.ji.adshelper.biling.entities.DataWrappers
 import com.ji.adshelper.biling.entities.ProductType
+import com.ji.adshelper.biling.entities.PurchasedState
 
 fun Purchase.getPurchaseInfo(): DataWrappers.PurchaseInfo {
     return DataWrappers.PurchaseInfo(
-        purchaseState,
-        developerPayload,
-        isAcknowledged,
-        isAutoRenewing,
-        orderId,
-        originalJson,
-        packageName,
-        purchaseTime,
-        purchaseToken,
-        signature,
-        products.find { it.isNotEmpty() } ?: "",
-        accountIdentifiers
+        purchaseState = PurchasedState.from(purchaseState),
+        developerPayload = developerPayload,
+        isAcknowledged = isAcknowledged,
+        isAutoRenewing = isAutoRenewing,
+        orderId = orderId,
+        originalJson = originalJson,
+        packageName = packageName,
+        purchaseTime = purchaseTime,
+        purchaseToken = purchaseToken,
+        signature = signature,
+        productId = products.find { it.isNotEmpty() } ?: "",
+        accountIdentifiers = accountIdentifiers
     )
 }
 

@@ -14,6 +14,7 @@ import com.ji.adshelper.biling.extension.toMap
 import com.ji.adshelper.biling.listener.BillingServiceListener
 import com.ji.adshelper.biling.listener.IPurchaseLiveEvent
 import com.ji.adshelper.biling.listener.OnRestoreListener
+import com.ji.adshelper.biling.utils.BillingUtils
 import java.util.Calendar
 
 @Suppress("MemberVisibilityCanBePrivate")
@@ -143,6 +144,10 @@ abstract class AbstractBillingProcessor : BillingServiceListener {
         calendar.timeInMillis = purchaseTime
         calendar.add(Calendar.DATE, productDetails.period)
         return calendar.timeInMillis
+    }
+
+    open fun getExpiredTimeFormatted(info: DataWrappers.PurchaseInfo?): String? {
+        return getExpiredTime(info).takeIf { it > 0 }?.let { BillingUtils.formatPurchaseDate(it) }
     }
 
     override fun onPurchaseError(isUserCancelled: Boolean) {

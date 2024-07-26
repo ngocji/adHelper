@@ -29,7 +29,7 @@ class DataWrappers {
 
 
     data class PurchaseInfo(
-        val purchaseState: Int,
+        val purchaseState: PurchasedState,
         val developerPayload: String,
         val isAcknowledged: Boolean,
         val isAutoRenewing: Boolean,
@@ -39,7 +39,7 @@ class DataWrappers {
         val purchaseTime: Long,
         val purchaseToken: String,
         val signature: String,
-        val sku: String,
+        val productId: String,
         val accountIdentifiers: AccountIdentifiers?
     )
 }
