@@ -13,6 +13,7 @@ import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
 import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.ProductDetailsResponseListener
 import com.android.billingclient.api.Purchase
@@ -107,6 +108,7 @@ object BillingService {
         nonConsumableSkus: List<String> = emptyList(),
         consumableSkus: List<String> = emptyList(),
         subscriptionSkus: List<String> = emptyList(),
+        pendingPurchasesParams: PendingPurchasesParams,
         decodedKey: String?,
     ) {
         BillingService.nonConsumableSkus = nonConsumableSkus
@@ -116,7 +118,7 @@ object BillingService {
 
         billingClient =
             BillingClient.newBuilder(app.applicationContext).setListener(purchasesUpdatedListener)
-                .enablePendingPurchases().build()
+                .enablePendingPurchases(pendingPurchasesParams).build()
         billingClient?.startConnection(billingClientStateListener)
     }
 
@@ -201,7 +203,8 @@ object BillingService {
         offerToken: String?
     ): Boolean {
         val productDetails = productDetailsMap[productId] ?: return false
-        val optimizeOfferToken = offerToken ?: productDetails.subscriptionOfferDetails?.find { it.offerToken.isNotEmpty() }?.offerToken
+        val optimizeOfferToken = offerToken
+            ?: productDetails.subscriptionOfferDetails?.find { it.offerToken.isNotEmpty() }?.offerToken
         val productDetailsParamsList =
             listOf(
                 BillingFlowParams.ProductDetailsParams.newBuilder()
@@ -258,11 +261,11 @@ object BillingService {
         }
     }
 
-    fun restorePurchase() {
-        refreshPurchasesAsync()
+    fun restorePurchase(onRestored: (isSuccess: Boolean) -> Unit) {
+        refreshPurchasesAsync(onRestored)
     }
 
-    private fun refreshPurchasesAsync() {
+    private fun refreshPurchasesAsync(onRestored: ((isSuccess: Boolean) -> Unit)? = null) {
         billingClient?.queryPurchasesAsync(
             BillingClient.ProductType.INAPP.getQueryPurchasesParams()
         ) { inAppResult, inAppPurchases ->
@@ -284,6 +287,9 @@ object BillingService {
                     addAll(subPurchasedList)
                 }
 
+                val isSuccess =
+                    purchases.any { it.purchaseState == Purchase.PurchaseState.PURCHASED }
+                onRestored?.invoke(isSuccess)
                 processPurchases(purchases, true)
             }
         }

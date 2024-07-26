@@ -2,6 +2,7 @@ package com.ji.adshelper.ads
 
 import android.app.Activity
 import android.content.Context
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.NonNull
@@ -15,6 +16,7 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.ji.adshelper.R
 import com.ji.adshelper.consent.ConsentInfo
 import com.ji.adshelper.view.NativeTemplateStyle
 import com.ji.adshelper.view.TemplateView
@@ -24,8 +26,50 @@ object AdsHelper {
     // region banner
     @JvmStatic
     fun loadNative(
+        containerView: ViewGroup,
+        isMedium: Boolean,
+        onAdLoadListener: AdLoadListener?
+    ) {
+        loadNative(containerView, isMedium, NativeTemplateStyle.Builder().build(), onAdLoadListener)
+    }
+
+    @JvmStatic
+    fun loadNative(
+        containerView: ViewGroup,
+        isMedium: Boolean,
+        styles: NativeTemplateStyle,
+        onAdLoadListener: AdLoadListener?
+    ) {
+        val templateView = LayoutInflater.from(containerView.context)
+            .inflate(
+                if (isMedium) R.layout.default_medium_template else R.layout.default_small_template,
+                null
+            ) as? TemplateView ?: return
+        containerView.removeAllViews()
+        containerView.addView(templateView)
+
+        loadNative(containerView, templateView, styles, onAdLoadListener)
+    }
+
+    @JvmStatic
+    fun loadNative(
         containerView: View,
         templateView: TemplateView,
+        onAdLoadListener: AdLoadListener? = null
+    ) {
+        loadNative(
+            containerView,
+            templateView,
+            NativeTemplateStyle.Builder().build(),
+            onAdLoadListener
+        )
+    }
+
+    @JvmStatic
+    fun loadNative(
+        containerView: View,
+        templateView: TemplateView,
+        styles: NativeTemplateStyle,
         onAdLoadListener: AdLoadListener? = null
     ) {
         if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
@@ -35,7 +79,6 @@ object AdsHelper {
 
         val adLoader = AdLoader.Builder(containerView.context, AdsSDK.nativeId)
             .forNativeAd { nativeAd ->
-                val styles = NativeTemplateStyle.Builder().build()
                 containerView.visibility = View.VISIBLE
                 templateView.visibility = View.VISIBLE
                 templateView.setStyles(styles)

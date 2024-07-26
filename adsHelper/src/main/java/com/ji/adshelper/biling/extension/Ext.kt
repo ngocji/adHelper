@@ -63,7 +63,7 @@ private fun findSubscriptionTrial(subscriptionOfferDetails: List<SubscriptionOff
     subscriptionOfferDetails?.forEach { detail ->
         detail.pricingPhases.pricingPhaseList.forEach { pricingPhase ->
             if (pricingPhase.priceAmountMicros <= 0) {
-                return parseTrialPeriod(pricingPhase.billingPeriod)
+                return parsePeriod(pricingPhase.billingPeriod)
             }
         }
     }
@@ -71,7 +71,7 @@ private fun findSubscriptionTrial(subscriptionOfferDetails: List<SubscriptionOff
     return 0
 }
 
-private fun parseTrialPeriod(billingPeriod: String): Int {
+private fun parsePeriod(billingPeriod: String): Int {
     if (billingPeriod.isBlank()) return 0
     var day = 0
     val period = billingPeriod.substring(1)
@@ -96,6 +96,7 @@ fun ProductDetails.toMap() = this.run {
     var priceCurrencyCode: String? = null
     var offers: List<DataWrappers.ProductDetails.Offer>? = null
     var trialPeriod = 0
+    var period = 0
 
     when (type) {
         ProductType.SUBSCRIPTION -> {
@@ -104,6 +105,7 @@ fun ProductDetails.toMap() = this.run {
                 price = it.formattedPrice
                 priceAmount = it.priceAmountMicros.toPriceAmount()
                 priceCurrencyCode = it.priceCurrencyCode
+                period = parsePeriod(it.billingPeriod)
             }
 
             offers = subscriptionOfferDetails?.mapToOffer()
@@ -125,7 +127,8 @@ fun ProductDetails.toMap() = this.run {
         productId = productId,
         productType = type,
         offers = offers,
-        trialPeriod = trialPeriod
+        trialPeriod = trialPeriod,
+        period = period
     )
 }
 

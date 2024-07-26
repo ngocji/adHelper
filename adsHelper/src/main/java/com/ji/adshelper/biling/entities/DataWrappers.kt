@@ -15,7 +15,8 @@ class DataWrappers {
         val priceAmount: Double?,
         val priceCurrencyCode: String?,
         val offers: List<Offer>? = null,
-        val trialPeriod: Int = 0
+        val trialPeriod: Int = 0,
+        val period: Int = 0
     ) {
         data class Offer(
             val offerId: String?,
