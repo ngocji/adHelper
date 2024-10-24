@@ -28,6 +28,7 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+    namespace 'com.x.y.z.adshelper'
 }
 
 dependencies {

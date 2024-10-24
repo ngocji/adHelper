@@ -2,6 +2,7 @@ package com.ji.adshelper.ads
 
 import android.Manifest
 import android.app.Application
+import androidx.annotation.LayoutRes
 import androidx.annotation.RequiresPermission
 import com.google.android.gms.ads.MobileAds
 import com.ji.adshelper.consent.ConsentInfo
@@ -15,6 +16,9 @@ object AdsSDK {
     var needRequireConsent = true
     var targetOpenAdVersion: Int = OpenAdsHelper.CURRENT_VERSION
     var isInstalled = false
+    var useAdCommonUI = true
+    var customAdLoadingId: Int = -1
+    var customAdErrorId: Int = -1
 
     @RequiresPermission(Manifest.permission.INTERNET)
     @JvmStatic
@@ -54,6 +58,8 @@ object AdsSDK {
                 onSuccess()
             }
         }
+
+        ConnectivityHelper.init(application)
     }
 
     @JvmStatic
@@ -65,6 +71,24 @@ object AdsSDK {
     @JvmStatic
     fun setRequireConsent(use: Boolean): AdsSDK {
         needRequireConsent = use
+        return this
+    }
+
+    @JvmStatic
+    fun setUseAdCommonUI(use: Boolean): AdsSDK {
+        useAdCommonUI = use
+        return this
+    }
+
+    @JvmStatic
+    fun setCustomAdLoadingId(@LayoutRes layoutId: Int): AdsSDK {
+        customAdLoadingId = layoutId
+        return this
+    }
+
+    @JvmStatic
+    fun setCustomAdErrorId(@LayoutRes layoutId: Int): AdsSDK {
+        customAdErrorId = layoutId
         return this
     }
 }

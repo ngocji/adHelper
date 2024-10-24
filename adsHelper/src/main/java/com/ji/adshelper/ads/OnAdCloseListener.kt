@@ -1,5 +1,5 @@
 package com.ji.adshelper.ads
 
-interface OnAdCloseListener {
+fun interface OnAdCloseListener {
     fun onClose()
 }

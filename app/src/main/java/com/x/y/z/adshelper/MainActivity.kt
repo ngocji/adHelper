@@ -1,37 +1,37 @@
 package com.x.y.z.adshelper
 
 import android.os.Bundle
-import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.ji.adshelper.ads.OnAdCloseListener
-import com.ji.adshelper.ads.OnAdListener
-import com.ji.adshelper.ads.OpenAdsHelper
+import com.google.android.gms.ads.AdSize
+import com.ji.adshelper.ads.AdsHelper
 
 class MainActivity : AppCompatActivity() {
-    private var isCheck = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        if (!isCheck) {
-            isCheck = true
-            OpenAdsHelper.getInstance()
-                ?.setAdListener(object : OnAdListener() {
-                    override fun onAdLoaded() {
-                        super.onAdLoaded()
-                        Log.e("Ads", "onAdLoaded")
-                        OpenAdsHelper.getInstance()?.show(object : OnAdCloseListener {
-                            override fun onClose() {
-                                OpenAdsHelper.getInstance()?.removeAdListener()
-                            }
-                        })
-                    }
 
-                    override fun onAdLoadFailed(code: Int) {
-                        super.onAdLoadFailed(code)
-                        Log.e("Ads", "onAdLoadFailed: $code")
-                    }
-                })
-                ?.fetch()
+        AdsHelper.loadInterstitialAd(this)
+        AdsHelper.loadRewardAd(this)
+
+        findViewById<View>(R.id.buttonInteres).setOnClickListener {
+            AdsHelper.showInterstitialAd(this, true, {
+                Toast.makeText(this, "AdClosed", Toast.LENGTH_SHORT).show()
+            })
         }
+
+        findViewById<View>(R.id.buttonReward).setOnClickListener {
+            AdsHelper.showRewardAd(this, true, {
+                Toast.makeText(this, "AdClosed", Toast.LENGTH_SHORT).show()
+            })
+        }
+
+        val banner = findViewById<ViewGroup>(R.id.bannerGroup)
+        AdsHelper.loadBanner(viewGroup = banner, AdSize.BANNER)
+
+        val native = findViewById<ViewGroup>(R.id.adsGroup)
+        AdsHelper.loadNative(viewGroup = native, isMedium = true)
     }
 }

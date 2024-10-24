@@ -1,102 +1,157 @@
 package com.ji.adshelper.ads
 
-import android.app.Activity
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.annotation.NonNull
 import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import com.google.ads.mediation.admob.AdMobAdapter
-import com.google.android.gms.ads.*
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdLoader
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.OnUserEarnedRewardListener
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.ji.adshelper.R
+import com.ji.adshelper.biling.DefaultBillingProcessor.isPurchased
 import com.ji.adshelper.consent.ConsentInfo
 import com.ji.adshelper.view.NativeTemplateStyle
 import com.ji.adshelper.view.TemplateView
+import kotlin.reflect.KClass
 
 
 object AdsHelper {
     // region banner
-    @JvmStatic
-    fun loadNative(
-        containerView: ViewGroup,
-        isMedium: Boolean,
-        onAdLoadListener: AdLoadListener?
-    ) {
-        loadNative(containerView, isMedium, NativeTemplateStyle.Builder().build(), onAdLoadListener)
-    }
+    private val connectivityChangeListeners =
+        mutableMapOf<String, ConnectivityHelper.OnConnectivityChangeListener>()
+    private val attachViewGroupListener = mutableMapOf<String, View.OnAttachStateChangeListener>()
 
     @JvmStatic
     fun loadNative(
-        containerView: ViewGroup,
-        isMedium: Boolean,
-        styles: NativeTemplateStyle,
-        onAdLoadListener: AdLoadListener?
-    ) {
-        val templateView = LayoutInflater.from(containerView.context)
-            .inflate(
-                if (isMedium) R.layout.default_medium_template else R.layout.default_small_template,
-                null
-            ) as? TemplateView ?: return
-        containerView.removeAllViews()
-        containerView.addView(templateView)
-
-        loadNative(containerView, templateView, styles, onAdLoadListener)
-    }
-
-    @JvmStatic
-    fun loadNative(
-        containerView: View,
-        templateView: TemplateView,
-        onAdLoadListener: AdLoadListener? = null
+        viewGroup: ViewGroup,
+        isMedium: Boolean
     ) {
         loadNative(
-            containerView,
-            templateView,
-            NativeTemplateStyle.Builder().build(),
-            onAdLoadListener
+            viewGroup = viewGroup,
+            isMedium = isMedium,
+            styles = null,
+            onAdLoadListener = null
         )
     }
 
     @JvmStatic
     fun loadNative(
-        containerView: View,
+        viewGroup: ViewGroup,
+        isMedium: Boolean,
+        styles: NativeTemplateStyle?
+    ) {
+        loadNative(
+            viewGroup = viewGroup,
+            isMedium = isMedium,
+            styles = styles,
+            onAdLoadListener = null
+        )
+    }
+
+    @JvmStatic
+    fun loadNative(
+        viewGroup: ViewGroup,
+        isMedium: Boolean,
+        styles: NativeTemplateStyle?,
+        onAdLoadListener: AdLoadListener?
+    ) {
+        val templateView = LayoutInflater.from(viewGroup.context)
+            .inflate(
+                if (isMedium) R.layout.default_medium_template else R.layout.default_small_template,
+                null
+            ) as? TemplateView ?: return
+
+        loadNative(
+            viewGroup = viewGroup,
+            templateView = templateView,
+            styles = styles,
+            onAdLoadListener = onAdLoadListener
+        )
+    }
+
+    @JvmStatic
+    fun loadNative(
+        viewGroup: ViewGroup,
         templateView: TemplateView,
-        styles: NativeTemplateStyle,
+        styles: NativeTemplateStyle?,
         onAdLoadListener: AdLoadListener? = null
     ) {
         if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
-            containerView.isVisible = false
+            viewGroup.isVisible = false
             return
         }
 
-        val adLoader = AdLoader.Builder(containerView.context, AdsSDK.nativeId)
-            .forNativeAd { nativeAd ->
-                containerView.visibility = View.VISIBLE
-                templateView.visibility = View.VISIBLE
-                templateView.setStyles(styles)
-                templateView.setNativeAd(nativeAd)
-            }
-            .withAdListener(object : com.google.android.gms.ads.AdListener() {
-                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                    containerView.visibility = View.GONE
-                    templateView.visibility = View.GONE
-                    onAdLoadListener?.onAddFailed()
+        viewGroup.cleanupNetworkListeners()
+
+        when {
+            isPurchased() -> viewGroup.isVisible = false
+            !ConnectivityHelper.isNetworkAvailable(viewGroup.context.applicationContext) -> {
+                if (AdsSDK.useAdCommonUI) {
+                    viewGroup.isVisible = true
+                    viewGroup.removeAllViews()
+                    viewGroup.addView(getAdErrorUI(viewGroup.context))
+                } else {
+                    viewGroup.isVisible = false
                 }
 
-                override fun onAdLoaded() {
-                    onAdLoadListener?.onAddLoaded()
+                viewGroup.onNetworkConnected {
+                    loadNative(
+                        viewGroup = viewGroup,
+                        templateView = templateView,
+                        styles = styles,
+                        onAdLoadListener = onAdLoadListener
+                    )
                 }
-            })
-            .build()
-        adLoader.loadAd(AdRequest.Builder().build())
+            }
+
+            else -> {
+                viewGroup.isVisible = true
+                viewGroup.removeAllViews()
+                if (AdsSDK.useAdCommonUI) {
+                    viewGroup.addView(getAdLoadingUI(viewGroup.context))
+                }
+
+                val adLoader = AdLoader.Builder(viewGroup.context, AdsSDK.nativeId)
+                    .forNativeAd { nativeAd ->
+                        templateView.visibility = View.VISIBLE
+                        templateView.setStyles(styles ?: NativeTemplateStyle.Builder().build())
+                        templateView.setNativeAd(nativeAd)
+                    }
+                    .withAdListener(object : com.google.android.gms.ads.AdListener() {
+                        override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                            if (AdsSDK.useAdCommonUI) {
+                                viewGroup.removeAllViews()
+                                viewGroup.addView(getAdErrorUI(viewGroup.context))
+                            } else {
+                                viewGroup.isVisible = false
+                            }
+                            onAdLoadListener?.onAddFailed()
+                        }
+
+                        override fun onAdLoaded() {
+                            viewGroup.removeAllViews()
+                            viewGroup.addView(templateView)
+                            onAdLoadListener?.onAddLoaded()
+                        }
+                    })
+                    .build()
+                adLoader.loadAd(AdRequest.Builder().build())
+            }
+        }
     }
 
     @JvmStatic
@@ -137,56 +192,97 @@ object AdsHelper {
             return
         }
 
-        if (viewGroup.childCount > 0) {
-            viewGroup.removeAllViews()
-        }
+        viewGroup.cleanupNetworkListeners()
+        when {
+            isPurchased() -> viewGroup.isVisible = false
+            !ConnectivityHelper.isNetworkAvailable(viewGroup.context.applicationContext) -> {
+                if (AdsSDK.useAdCommonUI) {
+                    viewGroup.isVisible = true
+                    viewGroup.removeAllViews()
+                    viewGroup.addView(getAdErrorUI(viewGroup.context))
+                } else {
+                    viewGroup.isVisible = false
+                }
 
-        val adView = AdView(context)
-        adView.adUnitId = AdsSDK.bannerId
-        adView.setAdSize(adSize)
-        viewGroup.addView(adView)
-        adView
-            .adListener = object : com.google.android.gms.ads.AdListener() {
-            override fun onAdFailedToLoad(p0: LoadAdError) {
-                onAdLoadListener?.onAddFailed()
-            }
-
-            override fun onAdLoaded() {
-                onAdLoadListener?.onAddLoaded()
-            }
-        }
-
-        val request = AdRequest.Builder()
-            .apply {
-                if (collapsibleType != null) {
-                    addNetworkExtrasBundle(
-                        AdMobAdapter::class.java, bundleOf(
-                            "collapsible" to collapsibleType.name.lowercase()
-                        )
+                viewGroup.onNetworkConnected {
+                    loadBanner(
+                        context = context,
+                        viewGroup = viewGroup,
+                        adSize = adSize,
+                        onAdLoadListener = onAdLoadListener
                     )
                 }
             }
-            .build()
 
-        adView.loadAd(request)
+            else -> {
+                viewGroup.isVisible = true
+                viewGroup.removeAllViews()
+                if (AdsSDK.useAdCommonUI) {
+                    viewGroup.addView(getAdLoadingUI(viewGroup.context))
+                }
+                val adView = AdView(context)
+                adView.adUnitId = AdsSDK.bannerId
+                adView.setAdSize(adSize)
+                adView
+                    .adListener = object : com.google.android.gms.ads.AdListener() {
+                    override fun onAdFailedToLoad(p0: LoadAdError) {
+                        if (AdsSDK.useAdCommonUI) {
+                            viewGroup.removeAllViews()
+                            viewGroup.addView(getAdErrorUI(viewGroup.context))
+                        } else {
+                            viewGroup.isVisible = false
+                        }
+
+                        onAdLoadListener?.onAddFailed()
+                    }
+
+                    override fun onAdLoaded() {
+                        viewGroup.removeAllViews()
+                        viewGroup.addView(adView)
+                        onAdLoadListener?.onAddLoaded()
+                    }
+                }
+
+                val request = AdRequest.Builder()
+                    .apply {
+                        if (collapsibleType != null) {
+                            addNetworkExtrasBundle(
+                                AdMobAdapter::class.java, bundleOf(
+                                    "collapsible" to collapsibleType.name.lowercase()
+                                )
+                            )
+                        }
+                    }
+                    .build()
+
+                adView.loadAd(request)
+            }
+        }
     }
 
     // endregion
     // region interstitial
-    private val interstitialAdSet = HashMap<Int, InterstitialAd>()
+    private val interstitialAdSet = HashMap<String, InterstitialAd>()
 
     @JvmStatic
     fun <T> isInterstitialAdLoaded(target: T): Boolean {
-        return interstitialAdSet[target.hashCode()] != null
+        return interstitialAdSet[target.getKey()] != null
     }
 
     @JvmStatic
-    fun <T> loadInterstitialAd(target: T, onAdLoadListener: AdLoadListener? = null) {
+    fun <T> releaseInterstitialAd(target: T) {
+        interstitialAdSet.remove(target.getKey())
+    }
+
+    @JvmStatic
+    fun loadInterstitialAd(context: Context?, key: String, onAdLoadListener: AdLoadListener?) {
+        context ?: return run {
+            onAdLoadListener?.onAddFailed()
+        }
+
         if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             return
         }
-
-        val context = getContext(target) ?: return
 
         InterstitialAd.load(context,
             AdsSDK.interstitialId,
@@ -194,7 +290,7 @@ object AdsHelper {
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(interstitialAd: InterstitialAd) {
                     super.onAdLoaded(interstitialAd)
-                    interstitialAdSet[target.hashCode()] = interstitialAd
+                    interstitialAdSet[key] = interstitialAd
                     onAdLoadListener?.onAddLoaded()
                 }
 
@@ -207,132 +303,106 @@ object AdsHelper {
     }
 
     @JvmStatic
-    fun <T> releaseInterstitialAd(target: T) {
-        interstitialAdSet.remove(target.hashCode())
+    fun <T> loadInterstitialAd(target: T, onAdLoadListener: AdLoadListener?) {
+        val context = getContext(target) ?: return
+        loadInterstitialAd(context, target.getKey(), onAdLoadListener)
+    }
+
+    @JvmStatic
+    fun <T> loadInterstitialAd(target: T) {
+        loadInterstitialAd(target, null)
+    }
+
+    @JvmStatic
+    fun showInterstitialAd(
+        activity: FragmentActivity?,
+        key: String,
+        cacheNew: Boolean,
+        callback: OnAdCloseListener?
+    ) {
+        activity ?: return run {
+            callback?.onClose()
+        }
+
+        val ins = interstitialAdSet[key]
+        if (ins == null) {
+            callback?.onClose()
+            if (cacheNew) loadInterstitialAd(activity, key, null)
+            return
+        }
+
+        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                super.onAdFailedToShowFullScreenContent(adError)
+                callback?.onClose()
+                interstitialAdSet.remove(key)
+                if (cacheNew) loadInterstitialAd(activity, key, null)
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                super.onAdDismissedFullScreenContent()
+                callback?.onClose()
+                interstitialAdSet.remove(key)
+                if (cacheNew) loadInterstitialAd(activity, key, null)
+            }
+
+        }
+        ins.show(activity)
+    }
+
+    @JvmStatic
+    fun <T> showInterstitialAd(target: T) {
+        showInterstitialAd(
+            activity = getActivity(target),
+            key = target.getKey(),
+            cacheNew = false,
+            callback = null
+        )
     }
 
     @JvmStatic
     fun <T> showInterstitialAd(target: T, cacheNew: Boolean) {
-        showInterstitialAd(target = target, cacheNew = cacheNew, callback = null)
+        showInterstitialAd(
+            activity = getActivity(target),
+            key = target.getKey(),
+            cacheNew = cacheNew,
+            callback = null
+        )
     }
 
     @JvmStatic
     fun <T> showInterstitialAd(target: T, cacheNew: Boolean, callback: OnAdCloseListener?) {
-        val ins = interstitialAdSet[target.hashCode()]
-        if (ins == null) {
-            callback?.onClose()
-            if (cacheNew) loadInterstitialAd(target)
-            return
-        }
-
-        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                super.onAdFailedToShowFullScreenContent(adError)
-                callback?.onClose()
-                interstitialAdSet.remove(target.hashCode())
-                if (cacheNew) loadInterstitialAd(target)
-            }
-
-            override fun onAdDismissedFullScreenContent() {
-                super.onAdDismissedFullScreenContent()
-                callback?.onClose()
-                interstitialAdSet.remove(target.hashCode())
-                if (cacheNew) loadInterstitialAd(target)
-            }
-
-        }
-        ins.show(getActivity(target) ?: return)
-    }
-
-    @JvmStatic
-    @Deprecated("")
-    fun <T> showInterstitialAd(target: T, cacheNew: Boolean, adListener: AdListener?) {
-        val ins = interstitialAdSet[target.hashCode()]
-        if (ins == null) {
-            adListener?.onAdLoadFailed()
-            loadInterstitialAd(target)
-            return
-        }
-        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                super.onAdFailedToShowFullScreenContent(adError)
-                adListener?.onAdLoadFailed()
-                interstitialAdSet.remove(target.hashCode())
-                if (cacheNew) loadInterstitialAd(target)
-            }
-
-            override fun onAdDismissedFullScreenContent() {
-                super.onAdDismissedFullScreenContent()
-                adListener?.onAdRewarded()
-                interstitialAdSet.remove(target.hashCode())
-                if (cacheNew) loadInterstitialAd(target)
-            }
-
-        }
-        ins.show(getActivity(target) ?: return)
-    }
-
-    @JvmStatic
-    fun <T> showOneInterstitialAd(key: Context, target: T) {
-        showOneInterstitialAd(key = key, target = target, callback = null)
-    }
-
-    @JvmStatic
-    fun <T> showOneInterstitialAd(key: Context, target: T, callback: OnAdCloseListener?) {
-        val ins = interstitialAdSet[key.hashCode()] ?: return run { callback?.onClose() }
-        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                super.onAdFailedToShowFullScreenContent(adError)
-                callback?.onClose()
-                interstitialAdSet.remove(target.hashCode())
-            }
-
-            override fun onAdDismissedFullScreenContent() {
-                super.onAdDismissedFullScreenContent()
-                callback?.onClose()
-                interstitialAdSet.remove(target.hashCode())
-            }
-
-        }
-        ins.show(getActivity(target) ?: return)
-    }
-
-    @JvmStatic
-    @Deprecated("")
-    fun <T> showOneInterstitialAd(key: Context, target: T, adListener: AdListener?) {
-        val ins = interstitialAdSet[key.hashCode()] ?: return
-        ins.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                super.onAdFailedToShowFullScreenContent(adError)
-                adListener?.onAdLoadFailed()
-                interstitialAdSet.remove(target.hashCode())
-            }
-
-            override fun onAdDismissedFullScreenContent() {
-                super.onAdDismissedFullScreenContent()
-                adListener?.onAdRewarded()
-                interstitialAdSet.remove(target.hashCode())
-            }
-
-        }
-        ins.show(getActivity(target) ?: return)
+        showInterstitialAd(
+            activity = getActivity(target),
+            key = target.getKey(),
+            cacheNew = cacheNew,
+            callback = callback
+        )
     }
 
     // endregion
-    private val rewardAdSet = HashMap<Int, RewardedAd>()
+    private val rewardAdSet = HashMap<String, RewardedAd>()
 
     @JvmStatic
     fun <T> isRewardAdLoaded(target: T): Boolean {
-        return rewardAdSet[target.hashCode()] != null
+        return rewardAdSet[target.getKey()] != null
     }
 
     @JvmStatic
-    fun <T> loadRewardAd(target: T, onAdLoadListener: AdLoadListener? = null) {
+    fun <T> releaseRewardAd(target: T) {
+        rewardAdSet.remove(target.getKey())
+    }
+
+    @JvmStatic
+    fun loadRewardAd(context: Context?, key: String, onAdLoadListener: AdLoadListener? = null) {
+        context ?: return run {
+            onAdLoadListener?.onAddFailed()
+        }
+
         if (AdsSDK.needRequireConsent && !ConsentInfo.isAcceptedConsent()) {
             return
         }
 
-        val context = getContext(target) ?: return
         RewardedAd.load(
             context,
             AdsSDK.rewardedId,
@@ -340,7 +410,7 @@ object AdsHelper {
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(rewardedAd: RewardedAd) {
                     super.onAdLoaded(rewardedAd)
-                    rewardAdSet[target.hashCode()] = rewardedAd
+                    rewardAdSet[key] = rewardedAd
                     onAdLoadListener?.onAddLoaded()
                 }
 
@@ -352,39 +422,67 @@ object AdsHelper {
     }
 
     @JvmStatic
-    fun <T> showRewardAd(target: T, cacheNew: Boolean, @NonNull callback: OnAdCloseListener) {
-        val rewardedAd = rewardAdSet[target.hashCode()]
-        if (rewardedAd == null) {
-            callback.onClose()
-            if (cacheNew) loadRewardAd(target)
+    fun <T> loadRewardAd(target: T, onAdLoadListener: AdLoadListener?) {
+        loadRewardAd(
+            context = getContext(target),
+            key = target.getKey(),
+            onAdLoadListener = onAdLoadListener
+        )
+    }
+
+    @JvmStatic
+    fun <T> loadRewardAd(target: T) {
+        loadRewardAd(context = getContext(target), key = target.getKey(), onAdLoadListener = null)
+    }
+
+    @JvmStatic
+    fun showRewardAd(
+        activity: FragmentActivity?,
+        key: String,
+        cacheNew: Boolean,
+        callback: OnAdCloseListener?
+    ) {
+        val rewardedAd = rewardAdSet[key]
+        if (rewardedAd == null || activity == null) {
+            callback?.onClose()
+            if (cacheNew) loadRewardAd(context = activity, key = key, onAdLoadListener = null)
             return
         }
-        rewardedAd.show(getActivity(target) ?: return, OnUserEarnedRewardListener {
-            callback.onClose()
-            rewardAdSet.remove(target.hashCode())
-            if (cacheNew) loadRewardAd(target)
+        rewardedAd.show(activity, OnUserEarnedRewardListener {
+            callback?.onClose()
+            rewardAdSet.remove(key)
+            if (cacheNew) loadRewardAd(context = activity, key = key)
         })
     }
 
     @JvmStatic
-    @Deprecated("")
-    fun <T> showRewardAd(target: T, cacheNew: Boolean, adListener: AdListener?) {
-        val rewardedAd = rewardAdSet[target.hashCode()]
-        if (rewardedAd == null) {
-            adListener?.onAdLoadFailed()
-            loadRewardAd(target)
-            return
-        }
-        rewardedAd.show(getActivity(target) ?: return, OnUserEarnedRewardListener {
-            adListener?.onAdRewarded()
-            rewardAdSet.remove(target.hashCode())
-            if (cacheNew) loadRewardAd(target)
-        })
+    fun <T> showRewardAd(target: T, cacheNew: Boolean, callback: OnAdCloseListener?) {
+        showInterstitialAd(
+            activity = getActivity(target),
+            key = target.getKey(),
+            cacheNew = cacheNew,
+            callback = callback
+        )
     }
 
     @JvmStatic
-    fun <T> releaseRewardAd(target: T) {
-        rewardAdSet.remove(target.hashCode())
+    fun <T> showRewardAd(target: T, callback: OnAdCloseListener?) {
+        showInterstitialAd(
+            activity = getActivity(target),
+            key = target.getKey(),
+            cacheNew = false,
+            callback = callback
+        )
+    }
+
+    @JvmStatic
+    fun <T> showRewardAd(target: T) {
+        showInterstitialAd(
+            activity = getActivity(target),
+            key = target.getKey(),
+            cacheNew = false,
+            callback = null
+        )
     }
 
     // region video reward
@@ -400,7 +498,15 @@ object AdsHelper {
         }
     }
 
-    private fun <T> getActivity(target: T): Activity? {
+    private fun <T> T?.getKey(): String {
+        return when (this) {
+            is Class<*> -> name
+            is KClass<*> -> this.java.name
+            else -> this?.toString() ?: ""
+        }
+    }
+
+    private fun <T> getActivity(target: T): FragmentActivity? {
         return when (target) {
             is Fragment -> (target as Fragment).activity
             is FragmentActivity -> target
@@ -408,11 +514,54 @@ object AdsHelper {
         }
     }
 
-    // endregion
-    abstract class AdListener {
-        abstract fun onAdLoadFailed()
-        abstract fun onAdRewarded()
+    private fun getAdLoadingUI(context: Context): View {
+        return LayoutInflater.from(context).inflate(
+            if (AdsSDK.customAdLoadingId > 0) AdsSDK.customAdLoadingId else R.layout.ad_loading_ui,
+            null
+        )
     }
+
+    private fun getAdErrorUI(context: Context): View {
+        return LayoutInflater.from(context).inflate(
+            if (AdsSDK.customAdErrorId > 0) AdsSDK.customAdErrorId else R.layout.ad_error_ui,
+            null
+        )
+    }
+
+    private fun ViewGroup.cleanupNetworkListeners() {
+        val key = getKey()
+        ConnectivityHelper.removeListener(connectivityChangeListeners.remove(key))
+        removeOnAttachStateChangeListener(attachViewGroupListener.remove(key))
+    }
+
+    private fun ViewGroup.onNetworkConnected(action: () -> Unit) {
+        val key = getKey()
+        cleanupNetworkListeners()
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            private val connectivityChangeListener =
+                ConnectivityHelper.OnConnectivityChangeListener { isConnected ->
+                    if (isConnected) {
+                        action()
+                        cleanupNetworkListeners()
+                    }
+                }
+
+            init {
+                attachViewGroupListener[key] = this
+                connectivityChangeListeners[key] = connectivityChangeListener
+            }
+
+            override fun onViewAttachedToWindow(v: View) {
+                ConnectivityHelper.addListener(connectivityChangeListener)
+            }
+
+            override fun onViewDetachedFromWindow(v: View) {
+                cleanupNetworkListeners()
+            }
+        })
+    }
+
+    // endregion
 
     abstract class AdLoadListener {
         abstract fun onAddFailed()
